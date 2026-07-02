@@ -1,0 +1,46 @@
+// Stripe Billing Kit 建表模板(Prisma)
+// 追加到产品 schema.prisma 末尾后执行:prisma migrate dev --name add_billing
+
+model BillingCustomer {
+  userId           String   @id @map("user_id")
+  stripeCustomerId String   @unique @map("stripe_customer_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  subscriptions    BillingSubscription[]
+
+  @@map("billing_customers")
+}
+
+model BillingSubscription {
+  stripeSubscriptionId String    @id @map("stripe_subscription_id")
+  userId               String    @map("user_id")
+  planKey              String    @map("plan_key")
+  status               String
+  currentPeriodEnd     DateTime? @map("current_period_end")
+  cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")
+  raw                  Json
+  syncedAt             DateTime  @default(now()) @map("synced_at")
+  customer             BillingCustomer @relation(fields: [userId], references: [userId])
+
+  @@index([userId, status])
+  @@map("billing_subscriptions")
+}
+
+model BillingPurchase {
+  stripeSessionId String   @id @map("stripe_session_id")
+  userId          String   @map("user_id")
+  planKey         String   @map("plan_key")
+  amountTotal     Int      @map("amount_total")
+  currency        String
+  purchasedAt     DateTime @default(now()) @map("purchased_at")
+
+  @@index([userId])
+  @@map("billing_purchases")
+}
+
+model BillingEvent {
+  stripeEventId String   @id @map("stripe_event_id")
+  type          String
+  processedAt   DateTime @default(now()) @map("processed_at")
+
+  @@map("billing_events")
+}

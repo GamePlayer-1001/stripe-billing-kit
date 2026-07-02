@@ -1,0 +1,37 @@
+{
+  "name": "@billing-kit/core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic Stripe billing core: dynamic catalog, checkout, webhooks, entitlements, sync.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./storage/pg": {
+      "types": "./dist/storage/pg.d.ts",
+      "default": "./dist/storage/pg.js"
+    },
+    "./storage/prisma": {
+      "types": "./dist/storage/prisma.d.ts",
+      "default": "./dist/storage/prisma.js"
+    },
+    "./storage/memory": {
+      "types": "./dist/storage/memory.d.ts",
+      "default": "./dist/storage/memory.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "stripe": "^22.3.0"
+  }
+}

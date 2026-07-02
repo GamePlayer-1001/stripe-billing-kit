@@ -1,0 +1,32 @@
+{
+  "name": "@billing-kit/express",
+  "version": "0.1.0",
+  "description": "Express adapter for @billing-kit/core.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@billing-kit/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "express": ">=4.18"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "express": "^5.1.0"
+  }
+}

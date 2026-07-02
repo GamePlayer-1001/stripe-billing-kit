@@ -1,0 +1,21 @@
+{
+  "name": "stripe-billing-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable, framework-agnostic Stripe billing kit: dynamic catalog, checkout, webhooks, entitlements.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.8.0",
+  "scripts": {
+    "build": "pnpm -r --sort build",
+    "typecheck": "pnpm -r --sort typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^3.0.0"
+  }
+}
