@@ -119,7 +119,7 @@ APP_URL=__________
 数据库:Postgres 直连 / Prisma
 前端框架:__________
 
-■ 套件文档:<stripe-billing-kit 仓库>/docs/INTEGRATION.md
+■ 套件文档:https://github.com/GamePlayer-1001/stripe-billing-kit/blob/main/docs/INTEGRATION.md
 ```
 
 ---

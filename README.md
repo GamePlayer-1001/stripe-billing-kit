@@ -2,6 +2,8 @@
 
 一套**框架无关、随拿随用**的 Stripe 支付接入套件。所有者在 Stripe 后台配置好商品与密钥,产品开发 AI 按内置文档半天内完成前后端接入;价格与套餐由 Stripe 数据驱动,**改价永不发版**。
 
+仓库:https://github.com/GamePlayer-1001/stripe-billing-kit
+
 ## 你是谁?从这里开始
 
 | 你是 | 读这份 |

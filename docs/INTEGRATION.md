@@ -44,9 +44,9 @@
 
 ```bash
 # 方式 A:git 子目录依赖(推荐,产品仓库独立时)
-pnpm add "github:<owner>/stripe-billing-kit#path:/packages/core" \
-         "github:<owner>/stripe-billing-kit#path:/packages/adapter-next" \
-         "github:<owner>/stripe-billing-kit#path:/packages/react"
+pnpm add "github:GamePlayer-1001/stripe-billing-kit#path:/packages/core" \
+         "github:GamePlayer-1001/stripe-billing-kit#path:/packages/adapter-next" \
+         "github:GamePlayer-1001/stripe-billing-kit#path:/packages/react"
 
 # 方式 B:本地路径依赖(产品与套件同机开发时)
 pnpm add file:../stripe-billing-kit/packages/core \
