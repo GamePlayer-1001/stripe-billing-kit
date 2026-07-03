@@ -209,7 +209,55 @@ import { hasAccess } from '@billing-kit/core';
 if (!(await hasAccess(billingConfig, userId, 'pro'))) return new Response('Payment Required', { status: 402 });
 ```
 
-### 3.3 非 React 前端:直接消费 HTTP 契约
+### 3.3 Vue 3 前端
+
+完整指南见 [`INTEGRATION-VUE.md`](./INTEGRATION-VUE.md)，核心步骤：
+
+```bash
+pnpm add @billing-kit/vue @billing-kit/core
+```
+
+```vue
+<!-- App.vue -->
+<script setup>
+import { provideBillingConfig } from '@billing-kit/vue';
+provideBillingConfig({ basePath: '/api/billing', refetchInterval: 300000 });
+</script>
+
+<!-- Pricing.vue -->
+<script setup>
+import { usePlans, useCheckout } from '@billing-kit/vue';
+const { plans, isLoading } = usePlans();
+const { checkout } = useCheckout();
+</script>
+<template>
+  <div v-for="plan in plans" :key="plan.key">
+    <button @click="checkout(plan.key)">购买</button>
+  </div>
+</template>
+```
+
+### 3.4 Electron 桌面应用
+
+完整指南见 [`INTEGRATION-ELECTRON.md`](./INTEGRATION-ELECTRON.md)，核心架构：
+
+- **主进程**：`initElectronBilling()` 注册自定义协议（如 `myapp://success`）拦截支付回调
+- **渲染进程**：通过 IPC 调用 `window.electron.billing.checkout(planKey)` 打开系统浏览器
+- **后端**：本地 Express（应用内嵌）或云端 API（推荐生产）
+
+```ts
+// main.ts
+import { initElectronBilling, openCheckout } from '@billing-kit/electron';
+initElectronBilling({
+  protocolScheme: 'myapp',
+  apiBasePath: 'http://localhost:3000/api/billing',
+  onCheckoutSuccess: (sessionId) => {
+    mainWindow?.webContents.send('billing:success', sessionId);
+  },
+});
+```
+
+### 3.5 其他前端框架：直接消费 HTTP 契约
 
 | 动作 | 调用 | 处理 |
 |---|---|---|

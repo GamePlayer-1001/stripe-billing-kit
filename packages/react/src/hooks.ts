@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { billingFetch, useBillingBasePath } from './client.js';
+import { billingFetch, useBillingBasePath, useBillingConfig } from './client.js';
 import type { BillingStatus, Catalog, CatalogPlan } from './types.js';
 
 export interface UsePlansResult {
@@ -13,7 +13,7 @@ export interface UsePlansResult {
 
 /** 定价页数据源:GET /catalog(价格全部来自 Stripe,前端零硬编码) */
 export function usePlans(): UsePlansResult {
-  const basePath = useBillingBasePath();
+  const { basePath, refetchInterval } = useBillingConfig();
   const [plans, setPlans] = useState<CatalogPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -38,6 +38,15 @@ export function usePlans(): UsePlansResult {
       cancelled = true;
     };
   }, [basePath, tick]);
+
+  // 轮询机制：根据 refetchInterval 自动刷新价格
+  useEffect(() => {
+    if (!refetchInterval || refetchInterval <= 0) return;
+    const timer = setInterval(() => {
+      setTick((t) => t + 1);
+    }, refetchInterval);
+    return () => clearInterval(timer);
+  }, [refetchInterval]);
 
   return { plans, isLoading, error, refresh: useCallback(() => setTick((t) => t + 1), []) };
 }

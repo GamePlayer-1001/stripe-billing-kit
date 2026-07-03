@@ -4,7 +4,6 @@
  */
 
 export interface CatalogPrice {
-  id: string;
   currency: string;
   unitAmount: number | null;
   interval: 'day' | 'week' | 'month' | 'year' | null;

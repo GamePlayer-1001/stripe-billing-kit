@@ -3,8 +3,6 @@ import type { BillingContext, PlanDef } from './config.js';
 import { BillingError } from './errors.js';
 
 export interface CatalogPrice {
-  /** 仅信息展示,前端不得回传 */
-  id: string;
   currency: string;
   /** 最小货币单位(如美分);custom/metered 价格可能为 null */
   unitAmount: number | null;
@@ -61,7 +59,6 @@ function toCatalogPlan(plan: PlanDef, price: Stripe.Price): CatalogPlan {
       images: product.images ?? [],
     },
     price: {
-      id: price.id,
       currency: price.currency,
       unitAmount: price.unit_amount,
       interval: price.recurring?.interval ?? null,
@@ -118,7 +115,8 @@ async function fetchCatalog(ctx: BillingContext): Promise<Catalog> {
     plans.push(toCatalogPlan(plan, price));
   }
 
-  return { plans, updatedAt: new Date().toISOString() };
+  const timestamp = new Date().toISOString();
+  return { plans, updatedAt: timestamp };
 }
 
 export async function getCatalog(ctx: BillingContext): Promise<Catalog> {
@@ -139,16 +137,27 @@ export async function getCatalog(ctx: BillingContext): Promise<Catalog> {
   return catalog;
 }
 
-/** 解析 plan → 实际 price id(checkout 用;catalog 缓存可复用) */
+/** 解析 plan → 实际 price id(checkout 用;直接从 Stripe 获取最新) */
 export async function resolvePriceId(ctx: BillingContext, planKey: string): Promise<string> {
   const plan = ctx.plansByKey.get(planKey);
   if (!plan) throw new BillingError('invalid_plan', `未知 planKey:${planKey}`);
+  
+  // 直接指定了 priceId
   if ('priceId' in plan.ref && plan.ref.priceId) return plan.ref.priceId;
 
-  const catalog = await getCatalog(ctx);
-  const entry = catalog.plans.find((p) => p.key === planKey);
-  if (!entry) {
-    throw new BillingError('invalid_plan', `planKey ${planKey} 在 Stripe 无有效价格(检查 lookup_key 与环境)`);
+  // 通过 lookup_key 从 Stripe 查询真实 priceId
+  if ('lookupKey' in plan.ref && plan.ref.lookupKey) {
+    try {
+      const prices = await ctx.stripe.prices.list({ lookup_keys: [plan.ref.lookupKey], limit: 1 });
+      const price = prices.data[0];
+      if (!price || !price.active) {
+        throw new BillingError('invalid_plan', `planKey ${planKey} 的 lookup_key 在 Stripe 无有效价格`);
+      }
+      return price.id;
+    } catch (err) {
+      throw new BillingError('stripe', `查询 planKey ${planKey} 的价格失败:${String(err)}`);
+    }
   }
-  return entry.price.id;
+
+  throw new BillingError('invalid_plan', `planKey ${planKey} 缺少 priceId 或 lookupKey`);
 }
