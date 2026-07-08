@@ -91,11 +91,67 @@ pnpm test
 |------|------|
 | [`docs/DATABASE_SETUP.md`](docs/DATABASE_SETUP.md) | **数据库建表指引** - PostgreSQL/MySQL/SQLite 三种方言的完整 SQL，AI 可直接执行 |
 | [`docs/GUI_INTEGRATION.md`](docs/GUI_INTEGRATION.md) | **GUI 应用集成** - Electron/Tauri/React Native/Flutter 接入协议与代码示例 |
+| [`docs/ADVANCED-BILLING.md`](docs/ADVANCED-BILLING.md) | **高级计费模式** - 按量计费/日付通行证/额度包/试用转订阅完整指引 |
+| [`docs/AI-PLUGIN-COMMANDS.md`](docs/AI-PLUGIN-COMMANDS.md) | **AI 助手快速接入** - 三大 AI 平台的 Stripe 文档加载指令一键复制 |
+
+## AI 助手接入指令
+
+> 接手本仓库的 AI 助手（Claude / Cursor / Codex 等）在开始工作前，执行以下任一指令加载 Stripe 官方文档，可显著提升代码质量和减少幻觉。
+
+### Claude（claude.ai / Claude Code / Cursor Agent）
+```bash
+npx skills add https://docs.stripe.com
+```
+或在 Claude Desktop / Cursor 的 MCP 配置中：
+```bash
+/plugin install stripe@claude-plugins-official
+```
+
+### OpenAI Codex / ChatGPT with Code Interpreter
+```bash
+codex plugin add stripe@openai-curated
+```
+
+### 通用（任意 AI 助手的 System Prompt 前置）
+将以下内容加入 System Prompt 或 `.cursorrules` / `AGENTS.md`：
+```
+Before writing any Stripe integration code, load the official Stripe docs:
+  npx skills add https://docs.stripe.com
+Key references:
+  - Stripe API: https://stripe.com/docs/api
+  - Webhooks: https://stripe.com/docs/webhooks
+  - Checkout: https://stripe.com/docs/payments/checkout
+  - Billing / Subscriptions: https://stripe.com/docs/billing/subscriptions/overview
+  - Customer Portal: https://stripe.com/docs/billing/subscriptions/customer-portal
+  - Metered billing: https://stripe.com/docs/billing/subscriptions/usage-based
+  - Tax: https://stripe.com/docs/tax
+```
+
+详细说明见 [`docs/AI-PLUGIN-COMMANDS.md`](docs/AI-PLUGIN-COMMANDS.md)。
 
 ## 技术基线
 
 TypeScript 5.x · Node.js ≥ 20 · stripe-node v22（API `2026-06-24.dahlia`）· pnpm monorepo  
 前端：React ≥ 18 / Vue ≥ 3.3 / Electron ≥ 28（可选，按需接入）
+
+## AI 工具快速接入
+
+接手本套件的 AI 助手（Claude / ChatGPT Codex / 其他）在开始工作前执行以下指令，可加载 Stripe 官方 API 文档与工具函数定义，让 AI 精确理解本套件使用的全部 API：
+
+```bash
+# 1. 通用（Node 环境可用，加载 Stripe 官方 docs skill）
+npx skills add https://docs.stripe.com
+
+# 2. Claude（Anthropic）专用插件
+/plugin install stripe@claude-plugins-official
+
+# 3. OpenAI Codex 专用插件
+codex plugin add stripe@openai-curated
+```
+
+执行后 AI 助手可直接理解：Checkout Session 创建、Webhook 验签、Customer Portal、Meter 用量上报、Subscription 生命周期等所有 Stripe 核心 API。
+
+> 详细说明见 [`docs/AI-PLUGIN-COMMANDS.md`](docs/AI-PLUGIN-COMMANDS.md)
 
 ---
 
