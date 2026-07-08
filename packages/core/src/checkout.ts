@@ -1,6 +1,6 @@
 /**
  * checkout.ts
- * 创建 Stripe Checkout 会话——支持全部 7 种付款模式：
+ * 创建 Stripe Checkout 会话——支持全部 8 种付款模式：
  *   subscription         : 自动包月/包年
  *   one_time             : 买断/终身
  *   trial_then_subscribe : 试用期须绑卡，到期自动转订阅
@@ -8,6 +8,7 @@
  *   metered              : 按量计费订阅（Stripe Meter）
  *   credit_package       : 一次性购买额度包
  *   daily                : 单日通行证（非自动续费）
+ *   first_trial          : 新用户专属首次试用（仅限首次订阅用户）
  *
  * 安全：planKey 必须在 config.plans 白名单内，由服务端解析为 price_id。
  * 绝不接受客户端直传 price_id。
@@ -190,6 +191,39 @@ export async function createCheckoutSession(
         },
         allow_promotion_codes: ctx.config.allowPromotionCodes ?? true,
         metadata: { ...meta, dailyDays: String(input.quantity ?? 1) },
+        success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
+        cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
+      };
+      break;
+    }
+
+    // ── 新用户专属首次试用（仅限首次订阅用户，一次性试用不可重复）───
+    case 'first_trial': {
+      if (!plan.trialDays) {
+        throw new BillingError('config', `planKey ${plan.key} 的 first_trial 必须设置 trialDays`);
+      }
+      if (!plan.trialConvertsTo) {
+        throw new BillingError('config', `planKey ${plan.key} 的 first_trial 必须设置 trialConvertsTo（试用结束后的正式套餐）`);
+      }
+      // 检查是否为新用户（从未订阅过任何套餐）
+      const { subs } = await ctx.storage.getEntitlementRows(input.userId);
+      if (subs.length > 0) {
+        throw new BillingError('invalid_plan', `planKey ${plan.key} 为新用户专属首次试用，用户 ${input.userId} 已有订阅记录`);
+      }
+      params = {
+        mode: 'subscription',
+        customer: customerId,
+        client_reference_id: input.userId,
+        line_items: [{ price: priceId, quantity: 1 }],
+        // 必须绑卡，试用结束自动扣款
+        payment_method_collection: 'always',
+        subscription_data: {
+          trial_period_days: plan.trialDays,
+          metadata: { ...meta, isFirstTrial: 'true' },
+        },
+        // 试用结束后引导到正式套餐
+        allow_promotion_codes: false,
+        metadata: { ...meta, isFirstTrial: 'true', trialConvertsTo: plan.trialConvertsTo },
         success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
         cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
       };

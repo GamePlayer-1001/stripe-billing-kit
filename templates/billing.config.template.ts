@@ -1,7 +1,7 @@
 /**
  * billing.config.template.ts
  * 把这个文件复制到你的项目根目录，重命名为 billing.config.ts，
- * 填入真实的 Price ID，即可接入全部 7 种付款模式。
+ * 填入真实的 Price ID，即可接入全部 8 种付款模式。
  *
  * ⚡ 价格由 Stripe Dashboard 驱动——改价只需在 Stripe 后台新建 Price，
  *    更新这里的 priceId，永不发版。
@@ -95,6 +95,19 @@ export default defineBillingConfig({
       type:     'daily',
       ref:      { priceId: 'price_XXXXXXX_daily' },
       features: ['pro'],
+    },
+
+    // ── 8. 新用户专属首次试用 ──────────────────────────────────
+    //    仅限首次订阅用户（isNewUser() 校验），不可重复订阅
+    //    试用结束需绑卡自动转正式套餐，trialConvertsTo 指向正式套餐的 planKey
+    //    使用流程：新建 Price（如 $0/7天）→ 试用结束 Stripe 自动切换到正式价格
+    {
+      key:             'first_trial_7d',
+      type:            'first_trial',
+      trialDays:       7,
+      trialConvertsTo: 'pro_monthly',         // 试用结束后的正式套餐
+      ref:             { priceId: 'price_XXXXXXX_trial_7d' },
+      features:        ['pro'],
     },
   ],
 

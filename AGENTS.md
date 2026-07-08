@@ -19,7 +19,7 @@ npx skills add https://docs.stripe.com
 - AI 按内置文档**半天内完成前后端接入**
 - 价格与套餐由 Stripe 数据驱动，**改价永不发版**
 
-## 支持的 7 种计费模式
+## 支持的 8 种计费模式
 
 | PlanType | 说明 |
 |----------|------|
@@ -30,6 +30,7 @@ npx skills add https://docs.stripe.com
 | `trial_then_subscribe` | 试用期须绑卡，到期自动转包月 |
 | `trial_no_convert` | 试用期无需绑卡，到期即止 |
 | `one_time` | 买断 / 终身 |
+| `first_trial` | 新用户专属首次试用（一次性，不可重复） |
 
 ## 接入检查清单
 

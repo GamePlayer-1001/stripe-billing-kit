@@ -30,7 +30,7 @@ You are working on **stripe-billing-kit** — a framework-agnostic, plug-and-pla
 6. **`BillingConfig` drives all SDK calls** — create context with `createBillingContext(config)`
 7. **All 7 plan types are implemented** — see `packages/core/src/checkout.ts` for switch cases
 
-### 7 Supported Plan Types
+### 8 Supported Plan Types
 - `subscription` — recurring monthly/yearly
 - `daily` — single-day pass (non-recurring)
 - `credit_package` — one-time credit bundle
@@ -38,6 +38,7 @@ You are working on **stripe-billing-kit** — a framework-agnostic, plug-and-pla
 - `trial_then_subscribe` — trial with card, auto-converts
 - `trial_no_convert` — trial without card, expires
 - `one_time` — lifetime/one-time purchase
+- `first_trial` — new user exclusive first trial (one-time only)
 
 ### Key API Patterns
 ```ts

@@ -45,7 +45,7 @@ templates/
   schema/                     # 数据库 schema（postgres/mysql/sqlite/prisma）
 ```
 
-### 支持的 7 种计费模式
+### 支持的 8 种计费模式
 
 | 模式 | PlanType | 说明 |
 |------|----------|------|
@@ -56,6 +56,7 @@ templates/
 | 按量实时计费 | `metered` | Stripe Meter，月底汇总出账 |
 | 试用→自动转包月 | `trial_then_subscribe` | 试用期须绑卡，到期自动扣款 |
 | 试用→不续费取消 | `trial_no_convert` | 试用期无需绑卡，到期即止 |
+| 新用户专属首次试用 | `first_trial` | 仅限首次订阅用户，一次性试用不可重复 |
 
 ## 第三步：接入流程（按顺序执行）
 

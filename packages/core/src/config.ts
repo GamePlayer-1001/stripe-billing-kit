@@ -11,6 +11,7 @@ import type { StorageAdapter } from './storage/types.js';
  * - metered            : 按消耗量实时计费（月底汇总出账）
  * - credit_package     : 额度包（一次买 N 点，消耗完再买）
  * - daily              : 日付（单日通行证，非自动续费）
+ * - first_trial        : 新用户专属首次试用（仅限首次订阅用户，一次性试用不可重复）
  */
 export type PlanType =
   | 'subscription'
@@ -19,7 +20,8 @@ export type PlanType =
   | 'trial_no_convert'
   | 'metered'
   | 'credit_package'
-  | 'daily';
+  | 'daily'
+  | 'first_trial';
 
 export type PlanRef = { lookupKey: string; priceId?: never } | { priceId: string; lookupKey?: never };
 
@@ -30,9 +32,9 @@ export interface PlanDef {
   ref: PlanRef;
   /** 该套餐解锁的能力标签 */
   features: string[];
-  /** 试用天数（trial_then_subscribe / trial_no_convert 模式必填） */
+  /** 试用天数（trial_then_subscribe / trial_no_convert / first_trial 模式必填） */
   trialDays?: number;
-  /** 试用期结束后绑定的订阅 planKey（trial_then_subscribe 模式必填） */
+  /** 试用期结束后绑定的订阅 planKey（trial_then_subscribe / first_trial 模式必填） */
   trialConvertsTo?: string;
   /** 额度包包含的点数（credit_package 模式必填） */
   creditAmount?: number;
@@ -129,9 +131,9 @@ function validate(config: BillingConfig): void {
     if (!plan.key) problems.push('存在缺少 key 的 plan');
     if (seen.has(plan.key)) problems.push(`plan key 重复:${plan.key}`);
     seen.add(plan.key);
-    const validTypes: PlanType[] = ['subscription','one_time','trial_then_subscribe','trial_no_convert','metered','credit_package','daily'];
+    const validTypes: PlanType[] = ['subscription','one_time','trial_then_subscribe','trial_no_convert','metered','credit_package','daily','first_trial'];
     if (!validTypes.includes(plan.type)) problems.push(`plan ${plan.key} 的 type 非法:${String(plan.type)}`);
-    if ((plan.type === 'trial_then_subscribe' || plan.type === 'trial_no_convert') && !plan.trialDays) problems.push(`plan ${plan.key} 使用 ${plan.type} 模式，trialDays 必填`);
+    if ((plan.type === 'trial_then_subscribe' || plan.type === 'trial_no_convert' || plan.type === 'first_trial') && !plan.trialDays) problems.push(`plan ${plan.key} 使用 ${plan.type} 模式，trialDays 必填`);
     if (plan.type === 'metered' && !plan.meterEventName) problems.push(`plan ${plan.key} 使用 metered 模式，meterEventName 必填`);
     if (plan.type === 'credit_package' && !plan.creditAmount) problems.push(`plan ${plan.key} 使用 credit_package 模式，creditAmount 必填`);
     const ref = plan.ref as { lookupKey?: string; priceId?: string } | undefined;

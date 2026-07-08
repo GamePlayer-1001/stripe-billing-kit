@@ -179,3 +179,42 @@ export async function isDailyPassActive(
   }
   return false;
 }
+
+// ══════════════════════════════════════════════════════════════
+// 新用户首次试用（first_trial）工具函数
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 检查用户是否为新用户（从未订阅过任何套餐）。
+ * 用于 first_trial 模式的前置校验。
+ * @returns true = 新用户，可以订阅 first_trial；false = 已有订阅记录
+ */
+export async function isNewUser(ctx: BillingContext, userId: string): Promise<boolean> {
+  const { subs } = await ctx.storage.getEntitlementRows(userId);
+  return subs.length === 0;
+}
+
+/**
+ * 检查用户是否已使用过首次试用。
+ * 通过检查用户是否有 isFirstTrial 标记的订阅记录。
+ * @param planKey 可选，指定检查特定套餐的首次试用
+ * @returns true = 已使用过首次试用；false = 尚未使用
+ */
+export async function hasUsedFirstTrial(
+  ctx: BillingContext,
+  userId: string,
+  planKey?: string,
+): Promise<boolean> {
+  const { subs } = await ctx.storage.getEntitlementRows(userId);
+
+  for (const sub of subs) {
+    // 检查 metadata 中是否有 isFirstTrial 标记
+    const raw = sub.raw as Record<string, unknown> | undefined;
+    if (raw?.isFirstTrial === 'true') {
+      // 如果指定了 planKey，需要匹配
+      if (planKey && sub.planKey !== planKey) continue;
+      return true;
+    }
+  }
+  return false;
+}
