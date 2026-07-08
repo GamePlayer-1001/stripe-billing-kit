@@ -1,4 +1,5 @@
 import type { BillingContext } from './config.js';
+import { BillingError } from './errors.js';
 
 export interface Entitlement {
   planKey: string;
@@ -125,7 +126,7 @@ export async function consumeUserCredit(
   // 降级：乐观扣减（非原子，高并发须在业务层加锁）
   const balance = await getCreditBalance(ctx, userId);
   if (balance < amount) {
-    throw new BillingError('insufficient_credits' as any, `额度不足：剩余 ${balance}，需要 ${amount}`);
+    throw new BillingError('insufficient_credits', `额度不足：剩余 ${balance}，需要 ${amount}`);
   }
   // 找最早的未耗尽 purchase 扣减
   const { purchases } = await ctx.storage.getEntitlementRows(userId);
@@ -178,5 +179,3 @@ export async function isDailyPassActive(
   }
   return false;
 }
-
-import { BillingError } from './errors.js';

@@ -46,7 +46,7 @@ export async function handleBillingRequest(
 
       case 'POST checkout': {
         if (!req.userId) return json(401, { error: 'unauthorized', message: '请先登录' });
-        const body = (req.jsonBody ?? {}) as { planKey?: unknown; quantity?: unknown };
+        const body = (req.jsonBody ?? {}) as { planKey?: unknown; quantity?: unknown; successUrl?: unknown; cancelUrl?: unknown };
         if (typeof body.planKey !== 'string' || !body.planKey) {
           return json(400, { error: 'invalid_plan', message: 'planKey 必填' });
         }
@@ -54,7 +54,9 @@ export async function handleBillingRequest(
           typeof body.quantity === 'number' && Number.isInteger(body.quantity) && body.quantity >= 1
             ? body.quantity
             : 1;
-        const result = await createCheckoutSession(ctx, { userId: req.userId, planKey: body.planKey, quantity });
+        const successUrl = typeof body.successUrl === 'string' ? body.successUrl : undefined;
+        const cancelUrl  = typeof body.cancelUrl  === 'string' ? body.cancelUrl  : undefined;
+        const result = await createCheckoutSession(ctx, { userId: req.userId, planKey: body.planKey, quantity, successUrl, cancelUrl });
         return json(200, { url: result.url });
       }
 

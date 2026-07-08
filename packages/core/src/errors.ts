@@ -5,7 +5,8 @@ export type BillingErrorCode =
   | 'no_customer'
   | 'webhook_verification'
   | 'not_found'
-  | 'stripe';
+  | 'stripe'
+  | 'insufficient_credits';
 
 const DEFAULT_STATUS: Record<BillingErrorCode, number> = {
   config: 500,
@@ -15,6 +16,7 @@ const DEFAULT_STATUS: Record<BillingErrorCode, number> = {
   webhook_verification: 400,
   not_found: 404,
   stripe: 502,
+  insufficient_credits: 402,
 };
 
 export class BillingError extends Error {

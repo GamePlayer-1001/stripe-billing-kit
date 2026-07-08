@@ -55,7 +55,9 @@ async function handleSubscriptionEvent(
   event:
     | Stripe.CustomerSubscriptionCreatedEvent
     | Stripe.CustomerSubscriptionUpdatedEvent
-    | Stripe.CustomerSubscriptionDeletedEvent,
+    | Stripe.CustomerSubscriptionDeletedEvent
+    | Stripe.CustomerSubscriptionPausedEvent
+    | Stripe.CustomerSubscriptionResumedEvent,
 ): Promise<void> {
   const sub = event.data.object;
   const customerId = customerIdOf(sub);
@@ -134,6 +136,8 @@ export async function handleWebhookRequest(
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted':
+    case 'customer.subscription.paused':
+    case 'customer.subscription.resumed':
       await handleSubscriptionEvent(ctx, event);
       break;
     case 'invoice.paid':

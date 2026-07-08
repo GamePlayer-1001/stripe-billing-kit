@@ -22,6 +22,10 @@ export interface CreateCheckoutInput {
   planKey: string;
   /** 额度包 / 买断可指定数量；其余模式留空 */
   quantity?: number;
+  /** 覆盖全局 config.urls.checkoutSuccess（per-request 场景） */
+  successUrl?: string;
+  /** 覆盖全局 config.urls.checkoutCancel（per-request 场景） */
+  cancelUrl?: string;
 }
 
 export interface CreateCheckoutResult {
@@ -59,8 +63,8 @@ export async function createCheckoutSession(
         subscription_data: { metadata: meta },
         allow_promotion_codes: ctx.config.allowPromotionCodes ?? true,
         metadata: meta,
-        success_url: ctx.config.urls.checkoutSuccess,
-        cancel_url: ctx.config.urls.checkoutCancel,
+        success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
+        cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
       };
       break;
     }
@@ -75,8 +79,8 @@ export async function createCheckoutSession(
         payment_intent_data: { metadata: meta },
         allow_promotion_codes: ctx.config.allowPromotionCodes ?? true,
         metadata: meta,
-        success_url: ctx.config.urls.checkoutSuccess,
-        cancel_url: ctx.config.urls.checkoutCancel,
+        success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
+        cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
       };
       break;
     }
@@ -99,8 +103,8 @@ export async function createCheckoutSession(
         },
         allow_promotion_codes: ctx.config.allowPromotionCodes ?? true,
         metadata: meta,
-        success_url: ctx.config.urls.checkoutSuccess,
-        cancel_url: ctx.config.urls.checkoutCancel,
+        success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
+        cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
       };
       break;
     }
@@ -127,8 +131,8 @@ export async function createCheckoutSession(
         },
         allow_promotion_codes: false,
         metadata: meta,
-        success_url: ctx.config.urls.checkoutSuccess,
-        cancel_url: ctx.config.urls.checkoutCancel,
+        success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
+        cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
       };
       break;
     }
@@ -147,8 +151,8 @@ export async function createCheckoutSession(
         subscription_data: { metadata: meta },
         allow_promotion_codes: false,
         metadata: meta,
-        success_url: ctx.config.urls.checkoutSuccess,
-        cancel_url: ctx.config.urls.checkoutCancel,
+        success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
+        cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
       };
       break;
     }
@@ -168,8 +172,8 @@ export async function createCheckoutSession(
         },
         allow_promotion_codes: ctx.config.allowPromotionCodes ?? true,
         metadata: { ...meta, creditAmount: String(plan.creditAmount * (input.quantity ?? 1)) },
-        success_url: ctx.config.urls.checkoutSuccess,
-        cancel_url: ctx.config.urls.checkoutCancel,
+        success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
+        cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
       };
       break;
     }
@@ -186,8 +190,8 @@ export async function createCheckoutSession(
         },
         allow_promotion_codes: ctx.config.allowPromotionCodes ?? true,
         metadata: { ...meta, dailyDays: String(input.quantity ?? 1) },
-        success_url: ctx.config.urls.checkoutSuccess,
-        cancel_url: ctx.config.urls.checkoutCancel,
+        success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
+        cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
       };
       break;
     }
