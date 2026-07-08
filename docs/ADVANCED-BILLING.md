@@ -37,7 +37,7 @@
 | 按量计费 | `metered` | `subscription` (usage-based) | AI token/API 调用/带宽 |
 | 额度包 | `credit_package` | `payment` | 预付点数、短信包 |
 | 单日通行证 | `daily` | `payment` | 日票、单次活动访问 |
-| 新用户专属首次试用 | `first_trial` | `subscription` + trial | 仅限首次订阅用户，一次性试用 |
+| 单次试用套餐 | `first_trial` | `subscription` + trial | 只能订阅一次，订阅后不再显示 |
 
 ---
 
@@ -291,15 +291,14 @@ onCheckoutCompleted: async ({ userId, planKey, session }) => {
 
 ---
 
-## 模式 8 — 新用户专属首次试用
+## 模式 8 — 单次试用套餐（first_trial）
 
-> 仅限从未订阅过任何套餐的新用户使用，一次性试用，不可重复订阅。
-> 试用结束需要绑卡自动转正式套餐。
+> 该套餐只能订阅一次，订阅后不再显示。用户可能订阅过其他套餐，但只要没订阅过这个套餐就可以购买。试用结束需要绑卡自动转正式套餐。
 
 ### 适用场景
-- **新用户首次体验**：吸引新用户首次订阅，降低转化门槛
-- **产品冷启动**：让潜在客户免费体验核心功能
-- **不可重复**：已订阅过的用户无法再次使用此套餐
+- **限时试用优惠**：吸引用户首次体验特定套餐功能
+- **不可重复购买**：每个用户只能使用一次该试用套餐
+- **不影响其他套餐**：用户仍可订阅其他 `first_trial` 套餐或其他类型套餐
 
 ### billing.config.ts
 ```ts
@@ -315,81 +314,55 @@ onCheckoutCompleted: async ({ userId, planKey, session }) => {
 
 ### 前置校验（前端可先检查）
 ```ts
-import { isNewUser, hasUsedFirstTrial } from '@stripe-billing-kit/core';
+import { hasSubscribedPlan, hasUsedFirstTrial } from '@stripe-billing-kit/core';
 
-// 检查用户是否为新用户
-const newUser = await isNewUser(ctx, userId);
-if (!newUser) {
-  return res.status(403).json({ error: '此套餐仅限新用户首次使用' });
+// 检查用户是否已订阅过该套餐
+const subscribed = await hasSubscribedPlan(ctx, userId, 'first_trial_7d');
+if (subscribed) {
+  return res.status(403).json({ error: '您已订阅过此套餐' });
 }
 
-// 检查用户是否已使用过此首次试用套餐
-const used = await hasUsedFirstTrial(ctx, userId);
+// 或检查是否使用过该试用（功能相同）
+const used = await hasUsedFirstTrial(ctx, userId, 'first_trial_7d');
 if (used) {
-  return res.status(403).json({ error: '您已使用过首次试用套餐' });
+  return res.status(403).json({ error: '您已使用过此试用套餐' });
 }
 ```
 
 ### 关键行为
-- **新用户检查**：订阅前检查用户 `subscriptions` 表是否为空
+- **仅限该套餐一次**：只检查用户是否订阅过**这个特定的**套餐
+- **不影响其他套餐**：用户订阅过其他套餐（如 pro_yearly）仍可购买此试用套餐
 - **不可重复**：同一用户只能使用一次 `first_trial` 套餐
 - **必须绑卡**：`payment_method_collection: 'always'`，用户必须提供信用卡
 - **自动转正式**：试用结束后 Stripe 自动扣款转为正式订阅
 - **metadata 标记**：订阅 metadata 中会标记 `isFirstTrial: 'true'`
 
 ### Stripe Dashboard 配置
-1. 创建两个 Product/Price：
-   - **试用 Price**：如 `$0 / 7 days`（Recurring）
-   - **正式 Price**：如 `$19 / month`（Recurring）
-2. 两个 Price 设置相同的 `lookup_key` 前缀（如 `pro_trial` 和 `pro_monthly`）
-3. 试用 Price 设置 **Trial period: 7 days**
-
-### 配置示例
-```ts
-plans: [
-  // 新用户专属首次试用
-  {
-    key:             'first_trial_7d',
-    type:            'first_trial',
-    trialDays:       7,
-    trialConvertsTo: 'pro_monthly',
-    ref:             { lookupKey: 'pro_trial_7d' },  // 试用价格
-    features:        ['pro'],
-  },
-  // 正式套餐
-  {
-    key:      'pro_monthly',
-    type:     'subscription',
-    ref:      { lookupKey: 'pro_monthly' },         // 正式价格
-    features: ['pro'],
-  },
-]
-```
+同「试用绑卡自动转订阅」模式。
 
 ### 前端展示逻辑
 ```tsx
-// 根据用户状态展示不同内容
+// 根据用户订阅状态决定是否展示该套餐
 function PricingPage({ user }) {
-  const [isNew] = useState(async () => {
-    if (!user) return false;
-    return await isNewUser(ctx, user.id);
-  });
-
   if (!user) {
     return <LoginPrompt />;
   }
 
-  if (isNew && !hasUsedFirstTrial(ctx, user.id)) {
-    return (
-      <>
-        <PlanCard key="first_trial" plan={firstTrialPlan} badge="新用户专享" />
-        <PlanCard key="monthly" plan={monthlyPlan} />
-      </>
-    );
-  }
+  const [subscribed] = useState(async () => {
+    return await hasSubscribedPlan(ctx, user.id, 'first_trial_7d');
+  });
 
-  // 已使用过首次试用或非新用户
-  return <PlanCard key="monthly" plan={monthlyPlan} />;
+  return (
+    <>
+      {/* 只展示给未订阅过该套餐的用户 */}
+      {!subscribed && (
+        <PlanCard key="first_trial" plan={firstTrialPlan} badge="限时试用" />
+      )}
+      {/* 正式套餐始终展示 */}
+      <PlanCard key="monthly" plan={monthlyPlan} />
+      <PlanCard key="yearly" plan={yearlyPlan} />
+    </>
+  );
 }
 ```
 

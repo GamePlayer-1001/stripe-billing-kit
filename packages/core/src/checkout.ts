@@ -8,7 +8,7 @@
  *   metered              : 按量计费订阅（Stripe Meter）
  *   credit_package       : 一次性购买额度包
  *   daily                : 单日通行证（非自动续费）
- *   first_trial          : 新用户专属首次试用（仅限首次订阅用户）
+ *   first_trial          : 单次试用套餐（只能订阅一次，订阅后不再显示）
  *
  * 安全：planKey 必须在 config.plans 白名单内，由服务端解析为 price_id。
  * 绝不接受客户端直传 price_id。
@@ -197,7 +197,7 @@ export async function createCheckoutSession(
       break;
     }
 
-    // ── 新用户专属首次试用（仅限首次订阅用户，一次性试用不可重复）───
+    // ── 单次试用套餐（该套餐只能订阅一次，订阅后不再显示）─────────
     case 'first_trial': {
       if (!plan.trialDays) {
         throw new BillingError('config', `planKey ${plan.key} 的 first_trial 必须设置 trialDays`);
@@ -205,10 +205,11 @@ export async function createCheckoutSession(
       if (!plan.trialConvertsTo) {
         throw new BillingError('config', `planKey ${plan.key} 的 first_trial 必须设置 trialConvertsTo（试用结束后的正式套餐）`);
       }
-      // 检查是否为新用户（从未订阅过任何套餐）
+      // 检查用户是否已订阅过该套餐（不限其他套餐）
       const { subs } = await ctx.storage.getEntitlementRows(input.userId);
-      if (subs.length > 0) {
-        throw new BillingError('invalid_plan', `planKey ${plan.key} 为新用户专属首次试用，用户 ${input.userId} 已有订阅记录`);
+      const hasSubscribedThisPlan = subs.some(s => s.planKey === plan.key);
+      if (hasSubscribedThisPlan) {
+        throw new BillingError('invalid_plan', `planKey ${plan.key} 已订阅过，用户 ${input.userId} 不可重复订阅`);
       }
       params = {
         mode: 'subscription',

@@ -97,11 +97,13 @@ export {
 } from './metered.js';
 export type { ReportUsageInput, ReportUsageResult, GetMeterUsageInput, GetMeterUsageResult } from './metered.js';
 
-// ── 额度包 + 日付通行证（entitlements 扩展）──
+// ── 额度包 + 日付通行证 + 单次试用套餐（entitlements 扩展）──
 export {
   getCreditBalance,
   consumeUserCredit,
   isDailyPassActive,
+  hasSubscribedPlan,
+  hasUsedFirstTrial,
 } from './entitlements.js';
 
 export type { BillingErrorCode } from './errors.js';

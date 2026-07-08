@@ -11,7 +11,7 @@ import type { StorageAdapter } from './storage/types.js';
  * - metered            : 按消耗量实时计费（月底汇总出账）
  * - credit_package     : 额度包（一次买 N 点，消耗完再买）
  * - daily              : 日付（单日通行证，非自动续费）
- * - first_trial        : 新用户专属首次试用（仅限首次订阅用户，一次性试用不可重复）
+ * - first_trial        : 单次试用套餐（只能订阅一次，订阅后不再显示）
  */
 export type PlanType =
   | 'subscription'

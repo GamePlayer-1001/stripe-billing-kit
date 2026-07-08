@@ -30,7 +30,7 @@ npx skills add https://docs.stripe.com
 | `trial_then_subscribe` | 试用期须绑卡，到期自动转包月 |
 | `trial_no_convert` | 试用期无需绑卡，到期即止 |
 | `one_time` | 买断 / 终身 |
-| `first_trial` | 新用户专属首次试用（一次性，不可重复） |
+| `first_trial` | 单次试用套餐（只能订阅一次，订阅后不再显示） |
 
 ## 接入检查清单
 

@@ -56,7 +56,7 @@ templates/
 | 按量实时计费 | `metered` | Stripe Meter，月底汇总出账 |
 | 试用→自动转包月 | `trial_then_subscribe` | 试用期须绑卡，到期自动扣款 |
 | 试用→不续费取消 | `trial_no_convert` | 试用期无需绑卡，到期即止 |
-| 新用户专属首次试用 | `first_trial` | 仅限首次订阅用户，一次性试用不可重复 |
+| 单次试用套餐 | `first_trial` | 只能订阅一次，订阅后不再显示 |
 
 ## 第三步：接入流程（按顺序执行）
 

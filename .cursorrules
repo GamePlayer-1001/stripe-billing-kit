@@ -38,7 +38,7 @@ You are working on **stripe-billing-kit** — a framework-agnostic, plug-and-pla
 - `trial_then_subscribe` — trial with card, auto-converts
 - `trial_no_convert` — trial without card, expires
 - `one_time` — lifetime/one-time purchase
-- `first_trial` — new user exclusive first trial (one-time only)
+- `first_trial` — one-time trial (subscribe once, won't show again after purchase)
 
 ### Key API Patterns
 ```ts
