@@ -1,0 +1,77 @@
+# Stripe Billing Kit — Cursor Rules
+
+## 开始任何 Stripe 相关代码工作前，先加载官方文档上下文
+
+```bash
+npx skills add https://docs.stripe.com
+/plugin install stripe@claude-plugins-official
+```
+
+## 本项目核心规则
+
+You are working on **stripe-billing-kit** — a framework-agnostic, plug-and-play Stripe billing integration kit.
+
+### Architecture
+- `packages/core/` — Framework-agnostic core (TypeScript). All billing logic lives here.
+- `packages/adapter-next/` — Next.js App Router adapter
+- `packages/adapter-express/` — Express adapter
+- `packages/react/` — React components + hooks
+- `packages/vue/` — Vue 3 components + composables
+- `packages/electron/` — Electron desktop integration
+- `docs/` — All integration guides. READ THESE FIRST.
+- `templates/` — Config templates and DB schemas
+
+### Coding Rules
+1. **Never hardcode price IDs** — always use `lookup_key` via `getCatalog()`, or reference `plan.ref.priceId` from config
+2. **Never accept priceId from frontend** — frontend sends `planKey` only; server resolves to priceId
+3. **Webhook signature must be verified** — use `stripe.webhooks.constructEvent()` with raw body
+4. **Deduplicate webhooks by event.id** — check `billing_events` table before processing
+5. **`syncStripeToDb()` is the only source of truth** — never write subscription state directly; always call sync
+6. **`BillingConfig` drives all SDK calls** — create context with `createBillingContext(config)`
+7. **All 7 plan types are implemented** — see `packages/core/src/checkout.ts` for switch cases
+
+### 7 Supported Plan Types
+- `subscription` — recurring monthly/yearly
+- `daily` — single-day pass (non-recurring)
+- `credit_package` — one-time credit bundle
+- `metered` — usage-based (Stripe Meter)
+- `trial_then_subscribe` — trial with card, auto-converts
+- `trial_no_convert` — trial without card, expires
+- `one_time` — lifetime/one-time purchase
+
+### Key API Patterns
+```ts
+// 1. Create billing context (singleton per config)
+const ctx = createBillingContext(billingConfig);
+
+// 2. Create checkout session (supports all 7 plan types)
+const { url } = await createCheckoutSession(ctx, { userId, planKey });
+
+// 3. Handle webhooks
+const event = await handleWebhook(ctx, rawBody, signature);
+
+// 4. Check entitlements
+const { hasAccess, features } = await checkEntitlement(ctx, userId, 'feature-name');
+
+// 5. Report metered usage
+await reportUsage(ctx, { userId, planKey, quantity: 5 });
+```
+
+### Stripe SDK Version
+Always use stripe-node `^17.x`. Verify API shapes at https://stripe.com/docs/api
+
+### Testing Cards
+- Success: `4242 4242 4242 4242`
+- 3DS required: `4000 0025 0000 3155`
+- Insufficient funds: `4000 0000 0000 9995`
+- Declined: `4000 0000 0000 0002`
+
+All cards: future expiry date, any 3-digit CVV, zip `42424`
+
+### Docs Reference
+- Integration guide: `docs/INTEGRATION.md`
+- Architecture: `docs/ARCHITECTURE.md`
+- Advanced billing modes: `docs/ADVANCED-BILLING.md`
+- Database setup: `docs/DATABASE_SETUP.md`
+- Stripe setup: `docs/STRIPE-SETUP.md`
+- AI plugin commands: `docs/AI-PLUGIN-COMMANDS.md`
