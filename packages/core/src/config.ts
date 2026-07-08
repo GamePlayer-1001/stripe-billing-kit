@@ -2,7 +2,24 @@ import Stripe from 'stripe';
 import { BillingError } from './errors.js';
 import type { StorageAdapter } from './storage/types.js';
 
-export type PlanType = 'subscription' | 'one_time';
+/**
+ * 支持的计费模式：
+ * - subscription       : 自动包月/包年（持续订阅）
+ * - one_time           : 买断/终身（一次性付款）
+ * - trial_then_subscribe : 试用期结束后自动转订阅（需提供支付方式）
+ * - trial_no_convert   : 试用期结束后到期即止，不自动扣款
+ * - metered            : 按消耗量实时计费（月底汇总出账）
+ * - credit_package     : 额度包（一次买 N 点，消耗完再买）
+ * - daily              : 日付（单日通行证，非自动续费）
+ */
+export type PlanType =
+  | 'subscription'
+  | 'one_time'
+  | 'trial_then_subscribe'
+  | 'trial_no_convert'
+  | 'metered'
+  | 'credit_package'
+  | 'daily';
 
 export type PlanRef = { lookupKey: string; priceId?: never } | { priceId: string; lookupKey?: never };
 
@@ -13,6 +30,16 @@ export interface PlanDef {
   ref: PlanRef;
   /** 该套餐解锁的能力标签 */
   features: string[];
+  /** 试用天数（trial_then_subscribe / trial_no_convert 模式必填） */
+  trialDays?: number;
+  /** 试用期结束后绑定的订阅 planKey（trial_then_subscribe 模式必填） */
+  trialConvertsTo?: string;
+  /** 额度包包含的点数（credit_package 模式必填） */
+  creditAmount?: number;
+  /** 按量计费的 Stripe Meter event name（metered 模式必填） */
+  meterEventName?: string;
+  /** Stripe Meter ID，用于查询用量（metered 模式可选，填了才能查余量） */
+  meterId?: string;
 }
 
 export interface BillingLogger {
@@ -102,7 +129,11 @@ function validate(config: BillingConfig): void {
     if (!plan.key) problems.push('存在缺少 key 的 plan');
     if (seen.has(plan.key)) problems.push(`plan key 重复:${plan.key}`);
     seen.add(plan.key);
-    if (plan.type !== 'subscription' && plan.type !== 'one_time') problems.push(`plan ${plan.key} 的 type 非法:${String(plan.type)}`);
+    const validTypes: PlanType[] = ['subscription','one_time','trial_then_subscribe','trial_no_convert','metered','credit_package','daily'];
+    if (!validTypes.includes(plan.type)) problems.push(`plan ${plan.key} 的 type 非法:${String(plan.type)}`);
+    if ((plan.type === 'trial_then_subscribe' || plan.type === 'trial_no_convert') && !plan.trialDays) problems.push(`plan ${plan.key} 使用 ${plan.type} 模式，trialDays 必填`);
+    if (plan.type === 'metered' && !plan.meterEventName) problems.push(`plan ${plan.key} 使用 metered 模式，meterEventName 必填`);
+    if (plan.type === 'credit_package' && !plan.creditAmount) problems.push(`plan ${plan.key} 使用 credit_package 模式，creditAmount 必填`);
     const ref = plan.ref as { lookupKey?: string; priceId?: string } | undefined;
     if (!ref?.lookupKey && !ref?.priceId) problems.push(`plan ${plan.key} 必须提供 ref.lookupKey 或 ref.priceId`);
     if (!plan.features?.length) problems.push(`plan ${plan.key} 的 features 不能为空`);

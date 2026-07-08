@@ -19,6 +19,14 @@ export interface PurchaseRow {
   planKey: string;
   amountTotal: number;
   currency: string;
+  /** 购买时间（daily 有效期计算需要；存储层不支持时为 undefined） */
+  createdAt?: Date;
+  /** 扩展元数据（键值对）。约定 key:
+   *  - 'dailyDays'    : 购买的天数（daily 模式）
+   *  - 'creditAmount' : 本次购买的额度点数（credit_package 模式）
+   *  - 'creditUsed'   : 已消耗点数（由 consumeCredit 写入）
+   */
+  metadata?: Record<string, string>;
 }
 
 /**
@@ -35,4 +43,18 @@ export interface StorageAdapter {
   upsertSubscription(row: SubscriptionRow): Promise<void>;
   insertPurchase(row: PurchaseRow): Promise<void>;
   getEntitlementRows(userId: string): Promise<{ subs: SubscriptionRow[]; purchases: PurchaseRow[] }>;
+  /**
+   * 可选：返回用户剩余可用额度（credit_package 模式）。
+   * 未实现时 core 会从 purchases.metadata 推算（不精确）。
+   */
+  getCreditBalance?(userId: string): Promise<number | undefined>;
+  /**
+   * 可选：原子扣减额度，返回扣减后余额；额度不足时 throw BillingError('insufficient_credits')。
+   * 未实现时请自行在业务层做乐观锁。
+   */
+  consumeCredit?(userId: string, amount: number): Promise<number>;
+  /**
+   * 可选：更新 purchase metadata（用于 consumeCredit 回写 creditUsed 字段）。
+   */
+  updatePurchaseMetadata?(sessionId: string, metadata: Record<string, string>): Promise<void>;
 }

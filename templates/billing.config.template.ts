@@ -1,44 +1,118 @@
 /**
- * billing.config.ts 模板 —— 复制到产品根目录后按「套餐信息表」修改 plans。
- * 这是产品接入 Stripe Billing Kit 时唯一需要编写的配置文件。
- * 字段说明见 docs/ARCHITECTURE.md 第 3 节;接入步骤见 docs/INTEGRATION.md。
+ * billing.config.template.ts
+ * 把这个文件复制到你的项目根目录，重命名为 billing.config.ts，
+ * 填入真实的 Price ID，即可接入全部 7 种付款模式。
+ *
+ * ⚡ 价格由 Stripe Dashboard 驱动——改价只需在 Stripe 后台新建 Price，
+ *    更新这里的 priceId，永不发版。
+ *
+ * 接入 AI 工具（让 AI 助手快速理解本套件）：
+ *   npx skills add https://docs.stripe.com
+ *   /plugin install stripe@claude-plugins-official
+ *   codex plugin add stripe@openai-curated
  */
-import type { BillingConfig } from '@billing-kit/core';
-import { pgStorage } from '@billing-kit/core/storage/pg';
-// import { prismaStorage } from '@billing-kit/core/storage/prisma';
-import { pool } from './src/lib/db'; // ← 换成产品自己的数据库实例
+import { defineBillingConfig } from '@stripe-billing-kit/core';
 
-export const billingConfig: BillingConfig = {
+export default defineBillingConfig({
   stripe: {
-    secretKey: process.env.STRIPE_SECRET_KEY!,
+    secretKey:     process.env.STRIPE_SECRET_KEY!,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
-    publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+    apiVersion:    '2025-04-30.basil',
   },
-
-  // ── 套餐声明:每行对应所有者交接卡「套餐信息表」的一行 ──
-  // key      = 产品内部稳定标识,业务代码只认它
-  // ref      = 优先 { lookupKey },所有者只给了 price_id 时用 { priceId }
-  // features = 该套餐解锁的能力标签,配合 hasAccess(userId, feature) 使用
-  plans: [
-    { key: 'pro_monthly', type: 'subscription', ref: { lookupKey: 'pro_monthly' }, features: ['pro'] },
-    { key: 'pro_yearly',  type: 'subscription', ref: { lookupKey: 'pro_yearly' },  features: ['pro'] },
-    { key: 'lifetime',    type: 'one_time',     ref: { lookupKey: 'lifetime' },    features: ['pro', 'lifetime'] },
-  ],
 
   urls: {
     checkoutSuccess: `${process.env.APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-    checkoutCancel: `${process.env.APP_URL}/pricing`,
-    portalReturn: `${process.env.APP_URL}/account`,
+    checkoutCancel:  `${process.env.APP_URL}/billing/cancel`,
+    portalReturn:    `${process.env.APP_URL}/billing`,
   },
 
-  storage: pgStorage(pool),
-  // storage: prismaStorage(prisma),
+  allowPromotionCodes: true,
 
-  // ── 以下全部可选 ──
-  // catalogTtlSeconds: 600,
-  // logger: console,
-  // hooks: {
-  //   onPaymentFailed: async ({ userId, invoice }) => { /* 发提醒邮件 */ },
-  //   onSubscriptionCanceled: async ({ userId }) => { /* 挽留流程 */ },
-  // },
-};
+  plans: [
+    // ── 1. 自动包月订阅 ─────────────────────────────────────────
+    {
+      key:      'pro_monthly',
+      type:     'subscription',
+      ref:      { priceId: 'price_XXXXXXX_monthly' },
+      features: ['pro', 'api_access'],
+    },
+
+    // ── 2. 自动包年订阅（享折扣）──────────────────────────────
+    {
+      key:      'pro_yearly',
+      type:     'subscription',
+      ref:      { priceId: 'price_XXXXXXX_yearly' },
+      features: ['pro', 'api_access'],
+    },
+
+    // ── 3. 试用期绑卡，到期自动转包月 ────────────────────────
+    //    用户须提供信用卡，7天免费，之后自动按月扣款
+    {
+      key:           'trial_auto',
+      type:          'trial_then_subscribe',
+      trialDays:     7,
+      trialConvertsTo: 'pro_monthly',          // 转成哪个套餐（仅注释用，Stripe 自动用同一 price）
+      ref:           { priceId: 'price_XXXXXXX_monthly' },
+      features:      ['pro'],
+    },
+
+    // ── 4. 试用期无需绑卡，到期即止 ──────────────────────────
+    //    用户无需信用卡，3天免费，到期订阅自动 cancel
+    {
+      key:       'trial_free',
+      type:      'trial_no_convert',
+      trialDays: 3,
+      ref:       { priceId: 'price_XXXXXXX_trial' },
+      features:  ['pro'],
+    },
+
+    // ── 5. 按量计费（每次 AI 调用按 token 计费）──────────────
+    //    Stripe Dashboard > Billing > Meters 里创建 Meter，
+    //    event_name 对应 meterEventName；Price 选 "Usage-based"
+    {
+      key:            'metered_tokens',
+      type:           'metered',
+      meterEventName: 'ai_tokens',            // Stripe Meter event_name
+      meterId:        'mtr_XXXXXXXXXXXXXXXX', // Stripe Meter ID（用于查余量）
+      ref:            { priceId: 'price_XXXXXXX_metered' },
+      features:       ['api_access'],
+    },
+
+    // ── 6. 额度包（一次买 1000 点，消耗完再买）────────────────
+    //    每调用一次 API 消耗 1 点，用 consumeUserCredit() 扣减
+    {
+      key:          'credits_1000',
+      type:         'credit_package',
+      creditAmount: 1000,
+      ref:          { priceId: 'price_XXXXXXX_credits' },
+      features:     ['api_access'],
+    },
+
+    // ── 7. 单日通行证（买今天的访问权，非自动续费）───────────
+    //    前端传 quantity=N 可买 N 天；isDailyPassActive() 校验有效期
+    {
+      key:      'daily_pass',
+      type:     'daily',
+      ref:      { priceId: 'price_XXXXXXX_daily' },
+      features: ['pro'],
+    },
+  ],
+
+  hooks: {
+    // Webhook 触发：checkout 支付成功后落库
+    onCheckoutCompleted: async ({ userId, planKey, planType }) => {
+      console.log(`[billing] user=${userId} plan=${planKey} type=${planType} paid`);
+      // 在这里把订阅/购买写入你自己的数据库
+    },
+
+    // Webhook 触发：订阅状态变更（升级/降级/取消/续费）
+    onSubscriptionChanged: async ({ userId, planKey, status }) => {
+      console.log(`[billing] subscription ${status}: user=${userId} plan=${planKey}`);
+    },
+
+    // Webhook 触发：扣款失败
+    onPaymentFailed: async ({ userId, invoice }) => {
+      console.warn(`[billing] payment failed: user=${userId} invoice=${invoice?.id}`);
+    },
+  },
+});

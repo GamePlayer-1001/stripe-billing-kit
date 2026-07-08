@@ -96,3 +96,53 @@ pnpm test
 
 TypeScript 5.x · Node.js ≥ 20 · stripe-node v22（API `2026-06-24.dahlia`）· pnpm monorepo  
 前端：React ≥ 18 / Vue ≥ 3.3 / Electron ≥ 28（可选，按需接入）
+
+---
+
+## AI 快速接入指令
+
+在你的 AI 编码助手中运行以下指令，即可让它自动读取 Stripe 官方文档，半天内完成全栈接入：
+
+```bash
+# Cursor / VS Code Copilot（通用 MCP 技能包）
+npx skills add https://docs.stripe.com
+
+# Claude（官方插件）
+/plugin install stripe@claude-plugins-official
+
+# OpenAI Codex（OpenAI 精选插件）
+codex plugin add stripe@openai-curated
+```
+
+---
+
+## 支持的 7 种付款模式
+
+| 模式 | `type` | 适用场景 |
+|------|--------|---------|
+| 自动包月/包年 | `subscription` | SaaS 主力付费墙 |
+| 买断/终身 | `one_time` | 工具软件终身授权 |
+| 试用绑卡→自动转订阅 | `trial_then_subscribe` | 需要绑卡的试用期 |
+| 免费试用→到期即止 | `trial_no_convert` | 不强制绑卡的体验期 |
+| 按量计费 | `metered` | AI token / API 调用 / 带宽 |
+| 额度包 | `credit_package` | 预付点数、短信包 |
+| 单日通行证 | `daily` | 日票、单次活动访问 |
+
+**5 分钟接入示例：**
+
+```ts
+import { createCheckoutSession, reportUsage, getCreditBalance } from '@stripe-billing-kit/core';
+
+// 1. 发起任意模式的 Checkout（planKey 在 billing.config.ts 中定义）
+const { url } = await createCheckoutSession(ctx, { userId, planKey: 'pro_monthly' });
+window.location.href = url;
+
+// 2. 按量计费：每次调用后上报用量
+await reportUsage(ctx, { userId, planKey: 'metered_tokens', value: tokenCount });
+
+// 3. 额度包：查询并消耗额度
+const balance = await getCreditBalance(ctx, userId);
+```
+
+> 完整的 7 种模式接入指南见 [`docs/ADVANCED-BILLING.md`](docs/ADVANCED-BILLING.md)  
+> 配置模板见 [`templates/billing.config.template.ts`](templates/billing.config.template.ts)

@@ -89,4 +89,19 @@ export type { StorageAdapter, CustomerRow, SubscriptionRow, PurchaseRow } from '
 
 // ── 错误 ──
 export { BillingError, isBillingError } from './errors.js';
+
+// ── 按量计费（metered）──
+export {
+  reportUsage,
+  getMeterUsage,
+} from './metered.js';
+export type { ReportUsageInput, ReportUsageResult, GetMeterUsageInput, GetMeterUsageResult } from './metered.js';
+
+// ── 额度包 + 日付通行证（entitlements 扩展）──
+export {
+  getCreditBalance,
+  consumeUserCredit,
+  isDailyPassActive,
+} from './entitlements.js';
+
 export type { BillingErrorCode } from './errors.js';
