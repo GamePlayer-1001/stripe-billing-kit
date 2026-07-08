@@ -39,13 +39,18 @@ async function handleCheckoutCompleted(ctx: BillingContext, event: Stripe.Checko
   }
 
   if (userId && planKey) {
+    const plan = ctx.plansByKey.get(planKey);
     await ctx.config.hooks?.onCheckoutCompleted?.({
       userId,
       planKey,
+      planType: plan?.type ?? 'unknown',
       mode: session.mode === 'payment' ? 'payment' : 'subscription',
       sessionId: session.id,
       amountTotal: session.amount_total,
       currency: session.currency,
+      quantity: session.metadata?.quantity ? parseInt(session.metadata.quantity, 10) : undefined,
+      creditAmount: session.metadata?.creditAmount ? parseInt(session.metadata.creditAmount, 10) : undefined,
+      amountCents: session.metadata?.amountCents ? parseInt(session.metadata.amountCents, 10) : undefined,
     });
   }
 }

@@ -11,22 +11,23 @@
 
 ## 目录
 
-1. [8 种付款模式速查](#8-种付款模式速查)
+1. [9 种付款模式速查](#9-种付款模式速查)
 2. [模式 1 — 自动包月/包年（subscription）](#模式-1--自动包月包年)
 3. [模式 2 — 买断/终身（one_time）](#模式-2--买断终身)
 4. [模式 3 — 试用转订阅（trial_then_subscribe）](#模式-3--试用绑卡自动转订阅)
 5. [模式 4 — 免费试用到期即止（trial_no_convert）](#模式-4--免费试用到期即止)
 6. [模式 5 — 按量计费（metered）](#模式-5--按量计费)
 7. [模式 6 — 额度包（credit_package）](#模式-6--额度包)
-8. [模式 7 — 单日通行证（daily）](#模式-7--单日通行证)
-9. [模式 8 — 新用户专属首次试用（first_trial）](#模式-8--新用户专属首次试用)
-10. [Webhook 事件处理](#webhook-事件处理)
-11. [前端接入（框架无关）](#前端接入框架无关)
-12. [环境变量清单](#环境变量清单)
+8. [模式 7 — 可变价格额度包（credit_variable）](#模式-7--可变价格额度包)
+9. [模式 8 — 单日通行证（daily）](#模式-8--单日通行证)
+10. [模式 9 — 新用户专属首次试用（first_trial）](#模式-9--新用户专属首次试用)
+11. [Webhook 事件处理](#webhook-事件处理)
+12. [前端接入（框架无关）](#前端接入框架无关)
+13. [环境变量清单](#环境变量清单)
 
 ---
 
-## 8 种付款模式速查
+## 9 种付款模式速查
 
 | 模式 | type | Stripe API mode | 适用场景 |
 |------|------|----------------|---------|
@@ -35,7 +36,8 @@
 | 试用绑卡→自动转订阅 | `trial_then_subscribe` | `subscription` + trial | 需要绑卡的试用期 |
 | 免费试用→到期即止 | `trial_no_convert` | `subscription` + trial | 不强制绑卡的体验期 |
 | 按量计费 | `metered` | `subscription` (usage-based) | AI token/API 调用/带宽 |
-| 额度包 | `credit_package` | `payment` | 预付点数、短信包 |
+| 额度包 | `credit_package` | `payment` | 预付点数、短信包（固定档位） |
+| 可变价格额度包 | `credit_variable` | `payment` | 用户自选金额充值 |
 | 单日通行证 | `daily` | `payment` | 日票、单次活动访问 |
 | 单次试用套餐 | `first_trial` | `subscription` + trial | 只能订阅一次，订阅后不再显示 |
 
@@ -237,7 +239,84 @@ RETURNING balance;
 
 ---
 
-## 模式 7 — 单日通行证
+## 模式 7 — 可变价格额度包（credit_variable）
+
+> 用户自选金额充值，兑换比率由使用者业务代码决定（组件不包含业务逻辑）。
+
+### 与 credit_package 的区别
+
+| 特性 | credit_package | credit_variable |
+|------|----------------|-----------------|
+| 价格 | 固定档位（如 $4.50 = 100 点） | 用户自选金额 |
+| 数量 | 用户可买多个包 | 用户输入充值金额 |
+| 兑换比率 | 固定（配置在 creditAmount） | 灵活（在你的业务代码里计算） |
+
+### Stripe Dashboard 配置
+
+1. Products → 新建产品 → Pricing: **One-off** → **Customer chooses price**
+2. 设置建议金额、最小/最大限制
+3. 复制 **Product ID**（不是 Price ID）
+
+### billing.config.ts
+
+```ts
+{
+  key: 'credit_custom',
+  type: 'credit_variable',
+  variableProductId: 'prod_xxxxxxxxxxxx',  // 产品 ID
+  features: ['credits'],
+}
+```
+
+### 后端：创建充值会话
+
+```ts
+import { createCheckoutSession } from '@stripe-billing-kit/core';
+
+// 用户选择充值 $50（5000 cents）
+const { url } = await createCheckoutSession(ctx, {
+  userId:   req.user.id,
+  planKey:  'credit_custom',
+  amount:   5000,  // 单位：cents（$50 = 5000）
+});
+res.json({ url });
+```
+
+### 后端：处理 Webhook（计算点数）
+
+```ts
+onCheckoutCompleted: async ({ userId, planKey, planType, amountCents }) => {
+  if (planType !== 'credit_variable') return;
+
+  // 兑换比率由你的业务代码决定
+  const CREDITS_PER_DOLLAR = 22;  // $1 = 22 点（可在数据库或 Stripe metadata 中配置）
+  const dollars = (amountCents ?? 0) / 100;
+  const credits = Math.floor(dollars * CREDITS_PER_DOLLAR);
+
+  await db.userCredits.add(userId, credits);
+  console.log(`用户 ${userId} 充值 ${dollars} 美元，获得 ${credits} 点`);
+}
+```
+
+### CheckoutCompletedContext 新增字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `planType` | string | 套餐类型，如 `'credit_variable'` |
+| `amountCents` | number | 用户支付金额（单位：cents） |
+| `quantity` | number | 购买数量（仅 credit_package/daily） |
+| `creditAmount` | number | 固定额度包的点数（仅 credit_package） |
+
+### 优势
+
+- ✅ **Stripe 端可配置**：建议金额、最小/最大限制
+- ✅ **业务逻辑解耦**：兑换比率在你的代码里，随时可改
+- ✅ **支持动态金额**：用户可以充值任意金额
+- ✅ **幂等安全**：同一用户同一金额 1 分钟内不会重复创建会话
+
+---
+
+## 模式 8 — 单日通行证
 
 > 非自动续费，购买当天（或指定 N 天）有效，到期自动失效。
 
@@ -291,7 +370,7 @@ onCheckoutCompleted: async ({ userId, planKey, session }) => {
 
 ---
 
-## 模式 8 — 单次试用套餐（first_trial）
+## 模式 9 — 单次试用套餐（first_trial）
 
 > 该套餐只能订阅一次，订阅后不再显示。用户可能订阅过其他套餐，但只要没订阅过这个套餐就可以购买。试用结束需要绑卡自动转正式套餐。
 

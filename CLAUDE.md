@@ -45,14 +45,15 @@ templates/
   schema/                     # 数据库 schema（postgres/mysql/sqlite/prisma）
 ```
 
-### 支持的 8 种计费模式
+### 支持的 9 种计费模式
 
 | 模式 | PlanType | 说明 |
 |------|----------|------|
 | 自动包月 | `subscription` + `interval: month` | 持续订阅，自动续费 |
 | 自动包年 | `subscription` + `interval: year` | 持续订阅，自动续费 |
 | 单日通行证 | `daily` | 一次性单日，非自动续费 |
-| 额度套餐包 | `credit_package` | 一次购买 N 点，消耗完再买 |
+| 额度套餐包 | `credit_package` | 一次购买 N 点，消耗完再买（固定档位） |
+| 可变价格额度包 | `credit_variable` | 用户自选金额充值，兑换比率由业务代码决定 |
 | 按量实时计费 | `metered` | Stripe Meter，月底汇总出账 |
 | 试用→自动转包月 | `trial_then_subscribe` | 试用期须绑卡，到期自动扣款 |
 | 试用→不续费取消 | `trial_no_convert` | 试用期无需绑卡，到期即止 |

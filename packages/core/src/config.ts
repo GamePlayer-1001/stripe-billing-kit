@@ -4,12 +4,13 @@ import type { StorageAdapter } from './storage/types.js';
 
 /**
  * 支持的计费模式：
- * - subscription       : 自动包月/包年（持续订阅）
+ * - subscription        : 自动包月/包年（持续订阅）
  * - one_time           : 买断/终身（一次性付款）
  * - trial_then_subscribe : 试用期结束后自动转订阅（需提供支付方式）
  * - trial_no_convert   : 试用期结束后到期即止，不自动扣款
  * - metered            : 按消耗量实时计费（月底汇总出账）
  * - credit_package     : 额度包（一次买 N 点，消耗完再买）
+ * - credit_variable    : 可变价格额度包（用户自选金额充值）
  * - daily              : 日付（单日通行证，非自动续费）
  * - first_trial        : 单次试用套餐（只能订阅一次，订阅后不再显示）
  */
@@ -20,6 +21,7 @@ export type PlanType =
   | 'trial_no_convert'
   | 'metered'
   | 'credit_package'
+  | 'credit_variable'
   | 'daily'
   | 'first_trial';
 
@@ -38,6 +40,8 @@ export interface PlanDef {
   trialConvertsTo?: string;
   /** 额度包包含的点数（credit_package 模式必填） */
   creditAmount?: number;
+  /** 可变价格额度包的产品 ID（credit_variable 模式必填） */
+  variableProductId?: string;
   /** 按量计费的 Stripe Meter event name（metered 模式必填） */
   meterEventName?: string;
   /** Stripe Meter ID，用于查询用量（metered 模式可选，填了才能查余量） */
@@ -53,10 +57,17 @@ export interface BillingLogger {
 export interface CheckoutCompletedContext {
   userId: string;
   planKey: string;
+  planType: string;
   mode: 'payment' | 'subscription';
   sessionId: string;
   amountTotal: number | null;
   currency: string | null;
+  /** 购买数量（额度包 / 日通行证模式） */
+  quantity?: number;
+  /** 固定额度包购买的点数（credit_package 模式） */
+  creditAmount?: number;
+  /** 可变额度包支付金额（credit_variable 模式，单位：cents） */
+  amountCents?: number;
 }
 
 export interface SubscriptionChangedContext {
@@ -131,11 +142,12 @@ function validate(config: BillingConfig): void {
     if (!plan.key) problems.push('存在缺少 key 的 plan');
     if (seen.has(plan.key)) problems.push(`plan key 重复:${plan.key}`);
     seen.add(plan.key);
-    const validTypes: PlanType[] = ['subscription','one_time','trial_then_subscribe','trial_no_convert','metered','credit_package','daily','first_trial'];
+    const validTypes: PlanType[] = ['subscription','one_time','trial_then_subscribe','trial_no_convert','metered','credit_package','credit_variable','daily','first_trial'];
     if (!validTypes.includes(plan.type)) problems.push(`plan ${plan.key} 的 type 非法:${String(plan.type)}`);
     if ((plan.type === 'trial_then_subscribe' || plan.type === 'trial_no_convert' || plan.type === 'first_trial') && !plan.trialDays) problems.push(`plan ${plan.key} 使用 ${plan.type} 模式，trialDays 必填`);
     if (plan.type === 'metered' && !plan.meterEventName) problems.push(`plan ${plan.key} 使用 metered 模式，meterEventName 必填`);
     if (plan.type === 'credit_package' && !plan.creditAmount) problems.push(`plan ${plan.key} 使用 credit_package 模式，creditAmount 必填`);
+    if (plan.type === 'credit_variable' && !plan.variableProductId) problems.push(`plan ${plan.key} 使用 credit_variable 模式，variableProductId 必填`);
     const ref = plan.ref as { lookupKey?: string; priceId?: string } | undefined;
     if (!ref?.lookupKey && !ref?.priceId) problems.push(`plan ${plan.key} 必须提供 ref.lookupKey 或 ref.priceId`);
     if (!plan.features?.length) problems.push(`plan ${plan.key} 的 features 不能为空`);

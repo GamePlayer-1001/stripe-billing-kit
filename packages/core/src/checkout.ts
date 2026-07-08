@@ -1,12 +1,13 @@
 /**
  * checkout.ts
- * 创建 Stripe Checkout 会话——支持全部 8 种付款模式：
+ * 创建 Stripe Checkout 会话——支持全部 9 种付款模式：
  *   subscription         : 自动包月/包年
  *   one_time             : 买断/终身
  *   trial_then_subscribe : 试用期须绑卡，到期自动转订阅
  *   trial_no_convert     : 试用期无需绑卡，到期即止
  *   metered              : 按量计费订阅（Stripe Meter）
- *   credit_package       : 一次性购买额度包
+ *   credit_package       : 一次性购买额度包（固定价格）
+ *   credit_variable      : 可变价格额度包（用户自选金额充值）
  *   daily                : 单日通行证（非自动续费）
  *   first_trial          : 单次试用套餐（只能订阅一次，订阅后不再显示）
  *
@@ -23,6 +24,8 @@ export interface CreateCheckoutInput {
   planKey: string;
   /** 额度包 / 买断可指定数量；其余模式留空 */
   quantity?: number;
+  /** 可变价格额度包（credit_variable）的充值金额，单位为货币最小单位（cents） */
+  amount?: number;
   /** 覆盖全局 config.urls.checkoutSuccess（per-request 场景） */
   successUrl?: string;
   /** 覆盖全局 config.urls.checkoutCancel（per-request 场景） */
@@ -179,6 +182,39 @@ export async function createCheckoutSession(
       break;
     }
 
+    // ── 可变价格额度包（用户自选金额充值）────────────────────────
+    //    注意：兑换比率（如 $1 = 22 点）由使用者业务代码处理，不在本组件内
+    case 'credit_variable': {
+      if (!plan.variableProductId) {
+        throw new BillingError('config', `planKey ${plan.key} 的 credit_variable 必须设置 variableProductId`);
+      }
+      if (!input.amount || input.amount <= 0) {
+        throw new BillingError('config', `planKey ${plan.key} 的 credit_variable 必须传入有效的 amount（单位：cents）`);
+      }
+      // 动态创建 price_data，不使用预定义的 price_id
+      params = {
+        mode: 'payment',
+        customer: customerId,
+        client_reference_id: input.userId,
+        line_items: [{
+          price_data: {
+            product: plan.variableProductId,
+            unit_amount: input.amount,  // 用户输入的金额（cents）
+            currency: 'usd',
+          },
+          quantity: 1,
+        }],
+        payment_intent_data: {
+          metadata: { ...meta, amountCents: String(input.amount) },
+        },
+        allow_promotion_codes: ctx.config.allowPromotionCodes ?? true,
+        metadata: { ...meta, amountCents: String(input.amount) },
+        success_url: input.successUrl ?? ctx.config.urls.checkoutSuccess,
+        cancel_url:  input.cancelUrl  ?? ctx.config.urls.checkoutCancel,
+      };
+      break;
+    }
+
     // ── 单日通行证（非自动续费）───────────────────────────────────
     case 'daily': {
       params = {
@@ -237,7 +273,8 @@ export async function createCheckoutSession(
 
   const session = await ctx.stripe.checkout.sessions.create(params, {
     // 出站幂等：分钟级时间桶，同一用户同一套餐 1 分钟内重复点击不开两个会话
-    idempotencyKey: `bk:checkout:${input.userId}:${plan.key}:${Math.floor(Date.now() / 60_000)}`,
+    // credit_variable 需要包含 amount 以区分不同金额的充值请求
+    idempotencyKey: `bk:checkout:${input.userId}:${plan.key}:${input.amount ?? 'fixed'}:${Math.floor(Date.now() / 60_000)}`,
   });
 
   if (!session.url) throw new BillingError('stripe', 'Stripe 未返回 checkout url');
