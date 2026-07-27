@@ -39,6 +39,15 @@ export function memoryStorage(): StorageAdapter & {
         purchases: [...purchases.values()].filter((p) => p.userId === userId),
       };
     },
+    async updatePurchaseMetadata(sessionId, metadata) {
+      const row = purchases.get(sessionId);
+      if (row) purchases.set(sessionId, { ...row, metadata });
+    },
+    async listCustomers(limit, offset) {
+      return [...customers.values()]
+        .sort((a, b) => a.userId.localeCompare(b.userId))
+        .slice(offset, offset + limit);
+    },
     dump() {
       return {
         customers: [...customers.values()],

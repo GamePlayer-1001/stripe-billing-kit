@@ -112,5 +112,13 @@ export function pgStorage(db: PgLike): StorageAdapter {
         })),
       };
     },
+
+    async listCustomers(limit, offset) {
+      const { rows } = await db.query(
+        'SELECT user_id, stripe_customer_id FROM billing_customers ORDER BY user_id LIMIT $1 OFFSET $2',
+        [limit, offset],
+      );
+      return rows.map((r) => ({ userId: r.user_id, stripeCustomerId: r.stripe_customer_id }));
+    },
   };
 }

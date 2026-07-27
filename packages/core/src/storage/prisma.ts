@@ -99,5 +99,14 @@ export function prismaStorage(prisma: PrismaLike): StorageAdapter {
         })),
       };
     },
+
+    async listCustomers(limit, offset) {
+      const rows = await prisma.billingCustomer.findMany({
+        orderBy: { userId: 'asc' },
+        take: limit,
+        skip: offset,
+      });
+      return rows.map((r: any) => ({ userId: r.userId, stripeCustomerId: r.stripeCustomerId }));
+    },
   };
 }

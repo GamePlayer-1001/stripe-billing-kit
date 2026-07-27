@@ -2,6 +2,16 @@
   "name": "@billing-kit/core",
   "version": "0.1.0",
   "description": "Framework-agnostic Stripe billing core: dynamic catalog, checkout, webhooks, entitlements, sync.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GamePlayer-1001/stripe-billing-kit.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["stripe", "billing", "subscription", "checkout", "webhook", "entitlements"],
   "type": "module",
   "engines": {
     "node": ">=20.19"

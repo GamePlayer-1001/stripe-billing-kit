@@ -142,7 +142,9 @@ stripe-billing-kit/
 │   ├── core/               # @billing-kit/core     框架无关核心
 │   ├── adapter-next/       # @billing-kit/next     Next.js 适配器
 │   ├── adapter-express/    # @billing-kit/express  Express 适配器
-│   └── react/              # @billing-kit/react    React hooks + headless 组件
+│   ├── react/              # @billing-kit/react    React hooks + headless 组件
+│   ├── vue/                # @billing-kit/vue      Vue 3 Composables + 类型(v1 后追加)
+│   └── electron/           # @billing-kit/electron Electron 主进程适配器(v1 后追加)
 └── templates/
     ├── billing.config.template.ts
     ├── env.template
@@ -155,7 +157,7 @@ stripe-billing-kit/
 |---|---|---|
 | M1(v1 核心) | core(catalog/checkout/webhook/entitlements/portal)+ Next.js 适配器 + Postgres 存储 + 五份文档 | ✅ 已完成(2026-07-02) |
 | M2 | Express 适配器 + Prisma 存储 + React 包 + 通知钩子 + 结构化日志 | ✅ 已完成(2026-07-02,与 M1 同批交付) |
-| M3(可选) | 对账 cron + CLI 脚手架 + 用量计费调研 | 未开始,按需 |
+| M3(可选) | 对账 cron + CLI 脚手架 + 用量计费调研 | 对账 `reconcile()` 已交付;用量计费已交付(metered);CLI 决定不做 |
 
 ## 10. 成功指标
 

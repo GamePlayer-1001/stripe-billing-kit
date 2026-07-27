@@ -2,6 +2,16 @@
   "name": "@billing-kit/react",
   "version": "0.1.0",
   "description": "React hooks and headless components for stripe-billing-kit HTTP contract.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GamePlayer-1001/stripe-billing-kit.git",
+    "directory": "packages/react"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["stripe", "billing", "react", "hooks"],
   "type": "module",
   "engines": {
     "node": ">=20.19"

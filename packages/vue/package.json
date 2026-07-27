@@ -1,6 +1,17 @@
 {
   "name": "@billing-kit/vue",
   "version": "0.1.0",
+  "description": "Vue 3 composables for stripe-billing-kit HTTP contract.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GamePlayer-1001/stripe-billing-kit.git",
+    "directory": "packages/vue"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["stripe", "billing", "vue", "composables"],
   "type": "module",
   "exports": {
     ".": {

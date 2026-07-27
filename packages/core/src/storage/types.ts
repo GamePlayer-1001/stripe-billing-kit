@@ -57,4 +57,9 @@ export interface StorageAdapter {
    * 可选：更新 purchase metadata（用于 consumeCredit 回写 creditUsed 字段）。
    */
   updatePurchaseMetadata?(sessionId: string, metadata: Record<string, string>): Promise<void>;
+  /**
+   * 可选：分页列出全部 user ↔ customer 映射（reconcile 对账 cron 用）。
+   * 实现要求排序稳定（如按 user_id），否则翻页会漏行。未实现时 reconcile() 直接报错。
+   */
+  listCustomers?(limit: number, offset: number): Promise<CustomerRow[]>;
 }

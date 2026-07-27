@@ -150,6 +150,32 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
 
 > 原理:权益授予以 webhook 为准,这里只是防 webhook 延迟的兜底,让用户付完立刻看到结果。
 
+### 2.4 对账 cron(推荐做,防 webhook 丢失)
+
+webhook 若因宕机/配置错误丢失(Stripe 重试约 3 天后放弃),本地权益会永久漂移。挂一个每日 cron 调 `reconcile()` 兜底:
+
+```ts
+// Next.js:app/api/cron/reconcile/route.ts(配 vercel.json 的 crons;Express 产品用 node-cron 同理)
+import { reconcile } from '@billing-kit/core';
+import { billingConfig } from '@/billing.config';
+
+export async function GET(req: Request) {
+  // Vercel Cron 自带 Authorization 头校验,自建 cron 请自行加密钥校验
+  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+  const report = await reconcile(billingConfig);
+  return Response.json(report); // { customers, synced, failed, durationMs }
+}
+```
+
+```json
+// vercel.json —— 每天凌晨 4 点(UTC)跑一次
+{ "crons": [{ "path": "/api/cron/reconcile", "schedule": "0 4 * * *" }] }
+```
+
+> 幂等可重复跑;单个 customer 失败不中断(计入 `failed` 并打日志)。默认每个 customer 之间隔 50ms 控制 Stripe API 节奏,用户量大时可调 `reconcile(config, { delayMs, pageSize })`。
+
 ---
 
 ## 3. 前端接入(约 30~60 分钟)

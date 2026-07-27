@@ -215,8 +215,10 @@ export async function hasUsedFirstTrial(
   for (const sub of subs) {
     if (sub.planKey !== planKey) continue;
     // 检查 metadata 中是否有 isFirstTrial 标记
-    const raw = sub.raw as Record<string, unknown> | undefined;
-    if (raw?.isFirstTrial === 'true') {
+    // （sync.ts 落库时 raw 存的是完整 Stripe subscription，标记位于 raw.metadata；
+    //   兼容直接把 metadata 存进 raw 的旧数据）
+    const raw = sub.raw as { isFirstTrial?: unknown; metadata?: Record<string, unknown> } | undefined;
+    if (raw?.isFirstTrial === 'true' || raw?.metadata?.['isFirstTrial'] === 'true') {
       return true;
     }
   }

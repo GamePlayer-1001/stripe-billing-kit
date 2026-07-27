@@ -6,6 +6,7 @@ import { createPortalSession as createPortalCtx } from './portal.js';
 import { syncStripeToDb as syncCtx, syncCheckoutSession as syncSessionCtx } from './sync.js';
 import { getEntitlements as getEntCtx, hasAccess as hasAccessCtx, type BillingStatus } from './entitlements.js';
 import { handleWebhookRequest as handleWebhookCtx, type WebhookResult } from './webhook.js';
+import { reconcile as reconcileCtx, type ReconcileOptions, type ReconcileReport } from './reconcile.js';
 
 /**
  * 公开 API 统一接受 BillingConfig(createBillingContext 内部有 WeakMap 缓存,
@@ -105,5 +106,11 @@ export {
   hasSubscribedPlan,
   hasUsedFirstTrial,
 } from './entitlements.js';
+
+// ── 对账兜底（cron 调用；如每天凌晨一次）──
+export async function reconcile(config: BillingConfig, options?: ReconcileOptions): Promise<ReconcileReport> {
+  return reconcileCtx(createBillingContext(config), options);
+}
+export type { ReconcileOptions, ReconcileReport } from './reconcile.js';
 
 export type { BillingErrorCode } from './errors.js';
