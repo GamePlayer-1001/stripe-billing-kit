@@ -72,6 +72,19 @@ templates/     billing.config 模板 · env 模板 · 建表 SQL / Prisma schema
 
 构建与测试:`pnpm install && pnpm build && pnpm test`(55 个单测覆盖配置校验、目录缓存、幂等、权益派生、HTTP 契约、9 种模式 Checkout、按量计费、额度包/日票/首单试用、对账 reconcile)。
 
+**变更管理**:使用 [`changesets`](https://github.com/changesets/changesets) 进行版本管理和 CHANGELOG 生成：
+
+```bash
+# 1. 创建变更集 (每次发布前执行)
+pnpm changeset
+
+# 2. 合并 CHANGELOG
+pnpm changeset version
+
+# 3. 发布到 npm
+pnpm -r publish --no-git-checks
+```
+
 ## 新产品接入流程(全景)
 
 ```

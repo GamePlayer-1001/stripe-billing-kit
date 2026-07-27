@@ -30,8 +30,8 @@ function periodEndOf(sub: Stripe.Subscription): Date | null {
 
 /**
  * ★ 全套件唯一的订阅状态写入口。
- * 从 Stripe 拉取该 customer 的订阅真相并 upsert 本地表(本地库只是读副本)。
- * webhook 与成功回跳页都调它;幂等,可重复调用。
+ * 从 Stripe 拉取该 customer 的订阅真相并 upsert 本地表 (本地库只是读副本)。
+ * webhook 与成功回跳页都调它;幂等，可重复调用。
  */
 export async function syncStripeToDb(ctx: BillingContext, stripeCustomerId: string): Promise<void> {
   const userId = await resolveUserByCustomerId(ctx, stripeCustomerId);
@@ -61,7 +61,14 @@ export async function syncStripeToDb(ctx: BillingContext, stripeCustomerId: stri
     });
   }
 
-  ctx.logger.info('billing.sync.done', { stripeCustomerId, userId, count: subs.data.length });
+  // 结构化日志：记录 sync 详细结果
+  const activeCount = subs.data.filter(s => s.status === 'active' || s.status === 'trialing').length;
+  ctx.logger.info('billing.sync.completed', {
+    stripeCustomerId,
+    userId,
+    totalSubscriptions: subs.data.length,
+    activeSubscriptions: activeCount,
+  });
 }
 
 /**
