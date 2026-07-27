@@ -53,7 +53,7 @@
 | storage-pg | core 内置 `storage/pg` | Postgres 实现 | `pg`(peer) |
 | storage-prisma | core 内置 `storage/prisma` | Prisma 实现 | `@prisma/client`(peer) |
 
-> 发布形态:npm 私有 registry 或 git 依赖均可;版本统一走 changesets。
+> 发布形态:已发布公共 npm(scope `@billing-kit`,https://www.npmjs.com/org/billing-kit),直接 `pnpm add` 安装。
 
 ---
 

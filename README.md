@@ -2,7 +2,21 @@
 
 一套**框架无关、随拿随用**的 Stripe 支付接入套件。所有者在 Stripe 后台配置好商品与密钥,产品开发 AI 按内置文档半天内完成前后端接入;价格与套餐由 Stripe 数据驱动,**改价永不发版**。
 
-仓库:https://github.com/GamePlayer-1001/stripe-billing-kit
+仓库:https://github.com/GamePlayer-1001/stripe-billing-kit  
+npm:https://www.npmjs.com/org/billing-kit
+
+## 安装
+
+已发布公共 npm(scope `@billing-kit`),按产品技术栈选包:
+
+```bash
+# Next.js 产品
+pnpm add @billing-kit/core @billing-kit/next @billing-kit/react
+
+# Express 后端 / Vue 前端 / Electron 桌面按需替换
+pnpm add @billing-kit/core @billing-kit/express @billing-kit/vue
+pnpm add @billing-kit/electron
+```
 
 ## 你是谁?从这里开始
 
@@ -56,7 +70,7 @@ packages/
 templates/     billing.config 模板 · env 模板 · 建表 SQL / Prisma schema
 ```
 
-构建与测试:`pnpm install && pnpm build && pnpm test`(50 个单测覆盖配置校验、目录缓存、幂等、权益派生、HTTP 契约、9 种模式 Checkout、按量计费、额度包/日票/首单试用)。
+构建与测试:`pnpm install && pnpm build && pnpm test`(55 个单测覆盖配置校验、目录缓存、幂等、权益派生、HTTP 契约、9 种模式 Checkout、按量计费、额度包/日票/首单试用、对账 reconcile)。
 
 ## 新产品接入流程(全景)
 

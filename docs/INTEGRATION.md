@@ -40,23 +40,18 @@
 
 ### 1.1 安装
 
-套件包位于本仓库 `packages/`(未发布公共 npm)。两种安装方式:
+套件已发布公共 npm(scope `@billing-kit`),直接安装:
 
 ```bash
-# 方式 A:git 子目录依赖(推荐,产品仓库独立时)
-pnpm add "github:GamePlayer-1001/stripe-billing-kit#path:/packages/core" \
-         "github:GamePlayer-1001/stripe-billing-kit#path:/packages/adapter-next" \
-         "github:GamePlayer-1001/stripe-billing-kit#path:/packages/react"
+# Next.js 产品
+pnpm add @billing-kit/core @billing-kit/next @billing-kit/react
 
-# 方式 B:本地路径依赖(产品与套件同机开发时)
-pnpm add file:../stripe-billing-kit/packages/core \
-         file:../stripe-billing-kit/packages/adapter-next \
-         file:../stripe-billing-kit/packages/react
-
-# Express 产品把 adapter-next 换成 adapter-express;安装后需先在套件目录跑一次 pnpm install && pnpm build
+# Express 产品把 @billing-kit/next 换成 @billing-kit/express
+# Vue 前端把 @billing-kit/react 换成 @billing-kit/vue
+# Electron 桌面应用额外加 @billing-kit/electron
 ```
 
-> 若所有者已将包发到私有 registry,直接 `pnpm add @billing-kit/core @billing-kit/next @billing-kit/react` 即可。
+> 本地联调套件源码时,可改用路径依赖:`pnpm add file:../stripe-billing-kit/packages/core ...`(需先在套件目录跑一次 `pnpm install && pnpm build`)。
 
 ### 1.2 环境变量(复制 `templates/env.template`)
 
