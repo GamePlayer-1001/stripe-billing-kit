@@ -133,6 +133,7 @@ export {
   resolveTriggerScope,
   handleCommissionRequest,
   evaluateAutoReview,
+  InMemoryReferralEventBus,
 } from './commission/index.js';
 export type {
   RewardComponent,
@@ -176,4 +177,7 @@ export type {
   AutoReviewRules,
   AutoReviewInput,
   AutoReviewResult,
+  ReferralEventBus,
+  ReferralStreamEvent,
+  ReferralEventListener,
 } from './commission/index.js';

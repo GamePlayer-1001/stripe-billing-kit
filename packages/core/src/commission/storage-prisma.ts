@@ -114,6 +114,10 @@ export function prismaCommissionStorage(prisma: PrismaCommissionLike): Commissio
       });
     },
 
+    async getCommissionById(commissionId) {
+      return prisma.commission.findUnique({ where: { id: commissionId } });
+    },
+
     async listCommissionsByOrder(orderId) {
       return prisma.commission.findMany({ where: { orderId } });
     },

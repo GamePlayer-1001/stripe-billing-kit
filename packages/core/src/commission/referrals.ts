@@ -6,6 +6,7 @@
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { BillingLogger } from '../config.js';
+import type { ReferralEventBus } from './stream-events.js';
 import type {
   CommissionStorage,
   ReferralCodeRow,
@@ -25,12 +26,22 @@ export function generateCode(): string {
   return code;
 }
 
+/** 邮箱脱敏（ab****@example.com）；非字符串/非邮箱返回 null */
+function maskEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const at = value.indexOf('@');
+  if (at <= 0) return null;
+  return `${value.slice(0, Math.min(2, at))}****${value.slice(at)}`;
+}
+
 export interface ReferralServiceOptions {
   storage: CommissionStorage;
   inviteLinkTemplate?: string;
   logger?: BillingLogger;
   /** 生成码时的碰撞重试上限 */
   maxCollisionRetries?: number;
+  /** 实时事件总线（6.3 SSE）；配置后绑定成功推送 referral.registered */
+  events?: ReferralEventBus;
 }
 
 export interface ValidateCodeResult {
@@ -50,12 +61,14 @@ export class ReferralService {
   private inviteLinkTemplate?: string;
   private logger?: BillingLogger;
   private maxCollisionRetries: number;
+  private events?: ReferralEventBus;
 
   constructor(opts: ReferralServiceOptions) {
     this.storage = opts.storage;
     this.inviteLinkTemplate = opts.inviteLinkTemplate;
     this.logger = opts.logger;
     this.maxCollisionRetries = opts.maxCollisionRetries ?? 5;
+    this.events = opts.events;
   }
 
   buildInviteLink(code: string): string | null {
@@ -142,6 +155,11 @@ export class ReferralService {
     await this.storage.insertRelationship(row);
     await this.storage.incrementCodeStats(row.originalCode, 'totalInvites');
     this.logger?.info('commission.referral.bound', { refereeUserId, referrerUserId: validation.referrerUserId });
+    // 实时推送"新用户通过我的码注册"（6.3 SSE；邮箱脱敏，缺省 null）
+    this.events?.publish(validation.referrerUserId, {
+      type: 'referral.registered',
+      data: { maskedEmail: maskEmail(metadata?.['email']) },
+    });
     return { bound: true, relationshipId };
   }
 

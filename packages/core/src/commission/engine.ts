@@ -206,6 +206,11 @@ export class CommissionEngine {
     return this.config.programId;
   }
 
+  /** 实时事件总线（适配层 SSE 端点订阅用；未配置返回 undefined） */
+  get events() {
+    return this.config.events;
+  }
+
   /**
    * 退款追回（5.3 charge.refunded → clawback）：
    * - PENDING/APPROVED → REFUNDED（存储层带前置状态条件，天然幂等：重放时回转 0 条）
@@ -239,6 +244,7 @@ export class CommissionEngine {
     if (ok) {
       await this.config.storage.setAuditQueueStatus(commissionId, 'APPROVED', { reviewedAt: new Date() });
       this.logger?.info('commission.review.approved', { commissionId });
+      await this.publishCommissionEvent('commission.approved', commissionId);
     } else {
       this.logger?.warn('commission.review.approve_rejected_by_state', { commissionId });
     }
@@ -270,10 +276,29 @@ export class CommissionEngine {
     const ok = await this.config.storage.transitionCommissionStatus(commissionId, ['APPROVED'], 'PAID');
     if (ok) {
       this.logger?.info('commission.payout.marked_paid', { commissionId });
+      await this.publishCommissionEvent('commission.paid', commissionId);
     } else {
       this.logger?.warn('commission.payout.mark_paid_rejected_by_state', { commissionId });
     }
     return ok;
+  }
+
+  /**
+   * 推送佣金状态事件（6.3 SSE）：回查佣金行取推荐人与金额。
+   * 总线缺省/查无此行时静默跳过，推送失败不影响主流程。
+   */
+  private async publishCommissionEvent(type: 'commission.approved' | 'commission.paid', commissionId: string): Promise<void> {
+    if (!this.config.events) return;
+    try {
+      const row = await this.config.storage.getCommissionById(commissionId);
+      if (!row) return;
+      this.config.events.publish(row.referrerUserId, {
+        type,
+        data: { commissionId, amount: row.amount },
+      });
+    } catch (err) {
+      this.logger?.warn('commission.events.publish_failed', { commissionId, error: String(err) });
+    }
   }
 
   /**
@@ -441,6 +466,14 @@ export class CommissionEngine {
         createdAt: now,
       };
       const inserted = await storage.insertCommission(row);
+
+      // 实时推送新佣金入账（6.3 SSE；幂等跳过时不重复推送）
+      if (inserted) {
+        this.config.events?.publish(node.referrerUserId, {
+          type: 'commission.created',
+          data: { commissionId, amount, currency: input.currency, tierLevel: node.tierLevel },
+        });
+      }
 
       // 7. 需人工审核的佣金自动入队（7.1 Level 2；insert 幂等，重放不双入队）
       if (inserted && reviewStatus === 'MANUAL_REVIEW') {

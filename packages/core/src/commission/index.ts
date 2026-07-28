@@ -90,3 +90,11 @@ export {
   type AutoReviewInput,
   type AutoReviewResult,
 } from './audit.js';
+
+// 实时事件总线（6.3 SSE；适配层 SSE 端点订阅）
+export {
+  InMemoryReferralEventBus,
+  type ReferralEventBus,
+  type ReferralStreamEvent,
+  type ReferralEventListener,
+} from './stream-events.js';

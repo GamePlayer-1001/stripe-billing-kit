@@ -34,6 +34,41 @@ export function createExpressBillingRouter(config: BillingConfig, options: Expre
     res.status(result.status).json(result.body);
   });
 
+  // SSE 实时推送(佣金到账/审核通过/打款完成,见规范 6.3):长连接流式响应,不进 core JSON 管线。
+  // 需在 CommissionConfig.events 配置事件总线(如 InMemoryReferralEventBus),否则 404。
+  router.get('/referrals/stream', async (req: Request, res: Response) => {
+    const events = config.commission?.engine.events;
+    if (!events) {
+      res.status(404).json({ error: 'not_found', message: '实时推送未启用' });
+      return;
+    }
+    const userId = await options.resolveUser(req);
+    if (!userId) {
+      res.status(401).json({ error: 'unauthorized', message: '请先登录' });
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no', // 关闭 nginx 缓冲,事件即时下发
+    });
+    res.write(': connected\n\n');
+
+    const unsubscribe = events.subscribe(userId, (event) => {
+      res.write(`event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`);
+    });
+    // 心跳注释行防代理/网关空闲超时断连
+    const heartbeat = setInterval(() => res.write(': ping\n\n'), 25_000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+      res.end();
+    });
+  });
+
   // 其余端点:正常 JSON。正则通配以支持多段路径(如 referrals/:userId/commissions)
   router.use(json());
   router.all(/.*/, async (req: Request, res: Response) => {

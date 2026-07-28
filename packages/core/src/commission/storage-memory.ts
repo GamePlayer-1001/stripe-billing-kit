@@ -87,6 +87,10 @@ export class InMemoryCommissionStorage implements CommissionStorage {
     this.commissions.set(row.id, { ...row });
     return true;
   }
+  async getCommissionById(commissionId: string): Promise<CommissionRow | null> {
+    const row = this.commissions.get(commissionId);
+    return row ? { ...row } : null;
+  }
   async countMonthlyConversions(referrerUserId: string, monthStart: Date): Promise<number> {
     let count = 0;
     for (const rel of this.relationships.values()) {

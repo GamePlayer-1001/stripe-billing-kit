@@ -225,6 +225,17 @@ export function pgCommissionStorage(db: PgLike): CommissionStorage {
       return (rowCount ?? 0) > 0;
     },
 
+    async getCommissionById(commissionId) {
+      const { rows } = await db.query(
+        `SELECT id, referrer_user_id, order_id, plan_key, amount, currency, rate_breakdown,
+                grant_status, tier_level, status, review_status, valid_until, created_at
+         FROM commissions WHERE id = $1`,
+        [commissionId],
+      );
+      const row = rows[0];
+      return row ? toCommissionRow(row) : null;
+    },
+
     async countMonthlyConversions(referrerUserId, monthStart) {
       const { rows } = await db.query(
         'SELECT COUNT(*)::int AS count FROM commissions WHERE referrer_user_id = $1 AND created_at >= $2',

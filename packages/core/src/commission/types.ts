@@ -7,6 +7,7 @@
  * - core 只依赖 CommissionStorage 接口，持久化由开发者实现（与 StorageAdapter 同风格）
  */
 import type { PlanType } from '../config.js';
+import type { ReferralEventBus } from './stream-events.js';
 
 // ──────────────────────────────────────────────────────
 // 奖励组件模型（2.3.1）
@@ -184,6 +185,8 @@ export interface CommissionStorage {
   // 佣金记录
   /** 幂等插入；唯一键冲突返回 false（已计过佣） */
   insertCommission(row: CommissionRow): Promise<boolean>;
+  /** 按 ID 查单条佣金（审批/打款事件推送取金额用）；不存在返回 null */
+  getCommissionById(commissionId: string): Promise<CommissionRow | null>;
   /** 推荐人本月转化数（REFERRER_MONTHLY_CONVERSIONS 驱动变量用） */
   countMonthlyConversions(referrerUserId: string, monthStart: Date): Promise<number>;
   /** 按订单查全部佣金记录（clawback 时区分可回转/已打款） */
@@ -336,6 +339,8 @@ export interface CommissionConfig {
   /** 最大分销层级，默认 3 */
   maxTierLevels?: number;
   hooks?: CommissionHooks;
+  /** 实时事件总线（6.3 SSE 推送）；缺省不推送。多实例部署需自行实现跨实例分发 */
+  events?: ReferralEventBus;
 }
 
 // ──────────────────────────────────────────────────────
