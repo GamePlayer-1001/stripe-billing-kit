@@ -149,3 +149,41 @@ CREATE TABLE IF NOT EXISTS configuration_versions (
   UNIQUE KEY uq_config_version (program_id, version_number),
   KEY idx_config_versions_program (program_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 打款记录（4.1 Payout）：付佣腿唯一事实来源；idempotency_key 唯一 = Layer 4 防重复打款
+CREATE TABLE IF NOT EXISTS payouts (
+  id                      VARCHAR(64)  NOT NULL,
+  referrer_user_id        VARCHAR(255) NOT NULL,
+  commission_ids          JSON         NOT NULL COMMENT '本次打款覆盖的佣金 ID 列表（批量结算）',
+  amount                  INT          NOT NULL COMMENT 'cents（各佣金之和）',
+  currency                VARCHAR(10)  NOT NULL,
+  fee_amount              INT          NOT NULL DEFAULT 0 COMMENT '通道手续费（如 PayPal $0.25/笔）',
+  provider                VARCHAR(30)  NOT NULL COMMENT 'STRIPE_CONNECT / PAYPAL / MANUAL',
+  provider_transaction_id VARCHAR(255) NULL COMMENT '通道侧流水号（对账主键）',
+  idempotency_key         VARCHAR(64)  NOT NULL COMMENT '= payout.id，防重复打款',
+  status                  VARCHAR(20)  NOT NULL DEFAULT 'CREATED' COMMENT 'CREATED/PROCESSING/SUCCEEDED/FAILED/UNCLAIMED/RETURNED',
+  failure_reason          TEXT         NULL,
+  created_at              DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  processed_at            DATETIME(3)  NULL,
+  settled_at              DATETIME(3)  NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_payout_idem (idempotency_key),
+  KEY idx_payouts_referrer (referrer_user_id),
+  KEY idx_payouts_status (status),
+  KEY idx_payouts_provider_txn (provider, provider_transaction_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Outbox 异步任务（5.4.2 webhook 快速响应）：event_id 唯一，失败指数退避重试
+CREATE TABLE IF NOT EXISTS commission_jobs (
+  id          VARCHAR(64)  NOT NULL,
+  event_id    VARCHAR(255) NOT NULL COMMENT 'Stripe event.id，与 claimEvent 联动',
+  job_type    VARCHAR(30)  NOT NULL COMMENT 'CALC_COMMISSION / CLAWBACK / GRANT_PRODUCT / PAYOUT',
+  payload     JSON         NOT NULL,
+  status      VARCHAR(20)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING / RUNNING / DONE / DEAD',
+  attempts    INT          NOT NULL DEFAULT 0,
+  next_run_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '指数退避重试',
+  created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_commission_job_event (event_id),
+  KEY idx_commission_jobs_due (status, next_run_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

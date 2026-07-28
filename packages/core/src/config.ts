@@ -3,6 +3,7 @@ import { BillingError } from './errors.js';
 import type { StorageAdapter } from './storage/types.js';
 import type { CommissionEngine } from './commission/engine.js';
 import type { ReferralService } from './commission/referrals.js';
+import type { PayoutService } from './commission/payouts.js';
 
 /**
  * 支持的计费模式：
@@ -113,8 +114,8 @@ export interface BillingConfig {
   hooks?: BillingHooks;
   /** Checkout 是否允许输入优惠码,默认 true */
   allowPromotionCodes?: boolean;
-  /** 佣金模块（可选启用）：engine 驱动 webhook 计佣；referrals 额外启用邀请码 REST 端点 */
-  commission?: { engine: CommissionEngine; referrals?: ReferralService };
+  /** 佣金模块（可选启用）：engine 驱动 webhook 计佣；referrals 额外启用邀请码 REST 端点；payouts 启用打款端点 */
+  commission?: { engine: CommissionEngine; referrals?: ReferralService; payouts?: PayoutService };
 }
 
 /** 校验后的运行时上下文:所有模块都从它取依赖(单例复用 Stripe client 与缓存) */

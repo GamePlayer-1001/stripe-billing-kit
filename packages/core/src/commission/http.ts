@@ -183,5 +183,67 @@ export async function handleCommissionRequest(
     return json(200, { activated: true, versionNumber });
   }
 
+  // ── POST admin/payouts：发起批量结算打款（管理员；未装配 PayoutService → 端点不存在） ──
+  const payouts = commission.payouts;
+  if (route === 'POST admin/payouts') {
+    if (!payouts) return null;
+    if (!req.isAdmin) return forbidden();
+    const body = (req.jsonBody ?? {}) as { referrerUserId?: unknown; commissionIds?: unknown };
+    if (typeof body.referrerUserId !== 'string' || !body.referrerUserId) {
+      return json(400, { error: 'invalid_request', message: 'referrerUserId 必填' });
+    }
+    const commissionIds = Array.isArray(body.commissionIds)
+      ? body.commissionIds.filter((id): id is string => typeof id === 'string')
+      : undefined;
+    const result = await payouts.createPayout({ referrerUserId: body.referrerUserId, commissionIds });
+    if (!result.created) {
+      return json(409, { error: 'payout_rejected', reason: result.reason, missingSteps: result.missingSteps });
+    }
+    return json(200, result.payout);
+  }
+
+  // ── GET admin/payouts：打款列表（管理员；对账/审计用） ──
+  if (route === 'GET admin/payouts') {
+    if (!payouts) return null;
+    if (!req.isAdmin) return forbidden();
+    const { limit, offset } = parsePagination(req.query);
+    const rawStatus = req.query?.['status'];
+    const status =
+      rawStatus === 'CREATED' || rawStatus === 'PROCESSING' || rawStatus === 'SUCCEEDED' ||
+      rawStatus === 'FAILED' || rawStatus === 'UNCLAIMED' || rawStatus === 'RETURNED'
+        ? rawStatus
+        : undefined;
+    const items = await engine.storage.listPayouts({
+      referrerUserId: req.query?.['referrerUserId'],
+      status,
+      limit,
+      offset,
+    });
+    return json(200, { items, limit, offset });
+  }
+
+  // ── POST admin/payouts/:id/status：人工标记打款结果（管理员；MANUAL 通道线下转账后回填） ──
+  const mPayoutStatus = method === 'POST' ? path.match(/^admin\/payouts\/([^/]+)\/status$/) : null;
+  if (mPayoutStatus) {
+    if (!payouts) return null;
+    if (!req.isAdmin) return forbidden();
+    const payoutId = decodeURIComponent(mPayoutStatus[1]!);
+    const body = (req.jsonBody ?? {}) as { status?: unknown; failureReason?: unknown };
+    if (
+      body.status !== 'PROCESSING' && body.status !== 'SUCCEEDED' && body.status !== 'FAILED' &&
+      body.status !== 'UNCLAIMED' && body.status !== 'RETURNED'
+    ) {
+      return json(400, { error: 'invalid_status', message: 'status 必须为合法打款状态' });
+    }
+    const ok = await payouts.applyProviderStatus(payoutId, body.status, {
+      failureReason: typeof body.failureReason === 'string' ? body.failureReason : undefined,
+    });
+    if (!ok) {
+      // 打款状态机拒绝：不存在或非法流转（重复回调/乱序）
+      return json(409, { error: 'invalid_state', message: '打款不存在或状态不允许该流转' });
+    }
+    return json(200, { ok: true, status: body.status });
+  }
+
   return null;
 }

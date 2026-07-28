@@ -152,3 +152,41 @@ model ConfigurationVersion {
   @@index([programId])
   @@map("configuration_versions")
 }
+
+// 打款记录(4.1 Payout):付佣腿唯一事实来源;idempotencyKey 唯一 = Layer 4 防重复打款
+model Payout {
+  id                    String    @id
+  referrerUserId        String    @map("referrer_user_id")
+  commissionIds         Json      @map("commission_ids") // 本次打款覆盖的佣金 ID 列表(批量结算)
+  amount                Int // cents(各佣金之和)
+  currency              String
+  feeAmount             Int       @default(0) @map("fee_amount") // 通道手续费(如 PayPal $0.25/笔)
+  provider              String // STRIPE_CONNECT / PAYPAL / MANUAL
+  providerTransactionId String?   @map("provider_transaction_id") // 通道侧流水号(对账主键)
+  idempotencyKey        String    @unique @map("idempotency_key") // = payout.id,防重复打款
+  status                String    @default("CREATED") // CREATED/PROCESSING/SUCCEEDED/FAILED/UNCLAIMED/RETURNED
+  failureReason         String?   @map("failure_reason")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  processedAt           DateTime? @map("processed_at")
+  settledAt             DateTime? @map("settled_at")
+
+  @@index([referrerUserId])
+  @@index([status])
+  @@index([provider, providerTransactionId])
+  @@map("payouts")
+}
+
+// Outbox 异步任务(5.4.2 webhook 快速响应):eventId 唯一,失败指数退避重试
+model CommissionJob {
+  id        String   @id
+  eventId   String   @unique @map("event_id") // Stripe event.id,与 claimEvent 联动
+  jobType   String   @map("job_type") // CALC_COMMISSION / CLAWBACK / GRANT_PRODUCT / PAYOUT
+  payload   Json
+  status    String   @default("PENDING") // PENDING / RUNNING / DONE / DEAD
+  attempts  Int      @default(0)
+  nextRunAt DateTime @default(now()) @map("next_run_at") // 指数退避重试
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([status, nextRunAt])
+  @@map("commission_jobs")
+}

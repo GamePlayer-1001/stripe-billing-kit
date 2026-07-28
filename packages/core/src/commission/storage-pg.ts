@@ -1,10 +1,12 @@
 import type { PgLike } from '../storage/pg.js';
 import type {
   AuditQueueItemRow,
+  CommissionJobRow,
   CommissionRow,
   CommissionRuleRow,
   CommissionStorage,
   ConfigVersionRow,
+  PayoutRow,
   ReferralCodeRow,
   ReferralRelationshipRow,
   ReferralStatsRow,
@@ -80,6 +82,38 @@ function toVersionRow(r: any): ConfigVersionRow {
     createdAt: new Date(r.created_at),
     activatedAt: r.activated_at ? new Date(r.activated_at) : null,
     isLatest: r.is_latest,
+  };
+}
+
+function toPayoutRow(r: any): PayoutRow {
+  return {
+    id: r.id,
+    referrerUserId: r.referrer_user_id,
+    commissionIds: r.commission_ids ?? [],
+    amount: r.amount,
+    currency: r.currency,
+    feeAmount: r.fee_amount,
+    provider: r.provider,
+    providerTransactionId: r.provider_transaction_id ?? null,
+    idempotencyKey: r.idempotency_key,
+    status: r.status,
+    failureReason: r.failure_reason ?? null,
+    createdAt: new Date(r.created_at),
+    processedAt: r.processed_at ? new Date(r.processed_at) : null,
+    settledAt: r.settled_at ? new Date(r.settled_at) : null,
+  };
+}
+
+function toJobRow(r: any): CommissionJobRow {
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    jobType: r.job_type,
+    payload: r.payload ?? {},
+    status: r.status,
+    attempts: r.attempts,
+    nextRunAt: new Date(r.next_run_at),
+    createdAt: new Date(r.created_at),
   };
 }
 
@@ -455,6 +489,136 @@ export function pgCommissionStorage(db: PgLike): CommissionStorage {
         pendingCents: agg?.pending ?? 0,
         paidThisMonthCents: agg?.paid_this_month ?? 0,
       } satisfies ReferralStatsRow;
+    },
+
+    async insertPayout(row) {
+      // idempotency_key 唯一约束:重复入账静默返回 false(Layer 4)
+      const { rowCount } = await db.query(
+        `INSERT INTO payouts
+           (id, referrer_user_id, commission_ids, amount, currency, fee_amount, provider,
+            provider_transaction_id, idempotency_key, status, failure_reason, created_at, processed_at, settled_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         ON CONFLICT (idempotency_key) DO NOTHING`,
+        [
+          row.id,
+          row.referrerUserId,
+          JSON.stringify(row.commissionIds),
+          row.amount,
+          row.currency,
+          row.feeAmount,
+          row.provider,
+          row.providerTransactionId,
+          row.idempotencyKey,
+          row.status,
+          row.failureReason,
+          row.createdAt,
+          row.processedAt,
+          row.settledAt,
+        ],
+      );
+      return (rowCount ?? 0) > 0;
+    },
+
+    async getPayout(payoutId) {
+      const { rows } = await db.query(
+        `SELECT id, referrer_user_id, commission_ids, amount, currency, fee_amount, provider,
+                provider_transaction_id, idempotency_key, status, failure_reason, created_at, processed_at, settled_at
+         FROM payouts WHERE id = $1`,
+        [payoutId],
+      );
+      const row = rows[0];
+      return row ? toPayoutRow(row) : null;
+    },
+
+    async updatePayoutStatus(payoutId, patch) {
+      await db.query(
+        `UPDATE payouts
+         SET status = $2,
+             provider_transaction_id = COALESCE($3, provider_transaction_id),
+             failure_reason = COALESCE($4, failure_reason),
+             processed_at = COALESCE($5, processed_at),
+             settled_at = COALESCE($6, settled_at)
+         WHERE id = $1`,
+        [
+          payoutId,
+          patch.status,
+          patch.providerTransactionId ?? null,
+          patch.failureReason ?? null,
+          patch.processedAt ?? null,
+          patch.settledAt ?? null,
+        ],
+      );
+    },
+
+    async listPayouts(opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+      const offset = Math.max(opts?.offset ?? 0, 0);
+      const conditions: string[] = [];
+      const values: unknown[] = [limit, offset];
+      if (opts?.referrerUserId) {
+        values.push(opts.referrerUserId);
+        conditions.push(`referrer_user_id = $${values.length}`);
+      }
+      if (opts?.status) {
+        values.push(opts.status);
+        conditions.push(`status = $${values.length}`);
+      }
+      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+      const { rows } = await db.query(
+        `SELECT id, referrer_user_id, commission_ids, amount, currency, fee_amount, provider,
+                provider_transaction_id, idempotency_key, status, failure_reason, created_at, processed_at, settled_at
+         FROM payouts ${where}
+         ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+        values,
+      );
+      return rows.map(toPayoutRow);
+    },
+
+    async enqueueJob(row) {
+      // event_id 唯一约束:webhook 重放不重复入队
+      const { rowCount } = await db.query(
+        `INSERT INTO commission_jobs (id, event_id, job_type, payload, status, attempts, next_run_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (event_id) DO NOTHING`,
+        [
+          row.id,
+          row.eventId,
+          row.jobType,
+          JSON.stringify(row.payload),
+          row.status,
+          row.attempts,
+          row.nextRunAt,
+          row.createdAt,
+        ],
+      );
+      return (rowCount ?? 0) > 0;
+    },
+
+    async claimDueJobs(limit, now) {
+      // FOR UPDATE SKIP LOCKED:多 worker 竞争时不重复领取
+      const { rows } = await db.query(
+        `UPDATE commission_jobs SET status = 'RUNNING'
+         WHERE id IN (
+           SELECT id FROM commission_jobs
+           WHERE status = 'PENDING' AND next_run_at <= $2
+           ORDER BY next_run_at LIMIT $1
+           FOR UPDATE SKIP LOCKED
+         )
+         RETURNING id, event_id, job_type, payload, status, attempts, next_run_at, created_at`,
+        [limit, now],
+      );
+      return rows.map(toJobRow);
+    },
+
+    async markJobDone(jobId) {
+      await db.query(`UPDATE commission_jobs SET status = 'DONE' WHERE id = $1`, [jobId]);
+    },
+
+    async markJobFailed(jobId, opts) {
+      await db.query(
+        `UPDATE commission_jobs SET status = $2, attempts = $3, next_run_at = $4 WHERE id = $1`,
+        [jobId, opts.dead ? 'DEAD' : 'PENDING', opts.attempts, opts.nextRunAt],
+      );
     },
   };
 }

@@ -11,6 +11,8 @@ export interface PrismaCommissionLike {
   commission: any;
   auditQueueItem: any;
   configurationVersion: any;
+  payout: any;
+  commissionJob: any;
 }
 
 export function prismaCommissionStorage(prisma: PrismaCommissionLike): CommissionStorage {
@@ -308,6 +310,116 @@ export function prismaCommissionStorage(prisma: PrismaCommissionLike): Commissio
         pendingCents: pending._sum?.amount ?? 0,
         paidThisMonthCents: paidThisMonth._sum?.amount ?? 0,
       };
+    },
+
+    async insertPayout(row) {
+      try {
+        await prisma.payout.create({
+          data: {
+            id: row.id,
+            referrerUserId: row.referrerUserId,
+            commissionIds: row.commissionIds as unknown as object,
+            amount: row.amount,
+            currency: row.currency,
+            feeAmount: row.feeAmount,
+            provider: row.provider,
+            providerTransactionId: row.providerTransactionId,
+            idempotencyKey: row.idempotencyKey,
+            status: row.status,
+            failureReason: row.failureReason,
+            createdAt: row.createdAt,
+            processedAt: row.processedAt,
+            settledAt: row.settledAt,
+          },
+        });
+        return true;
+      } catch (err: any) {
+        // P2002 = idempotencyKey 唯一约束冲突 → 重复入账,幂等跳过(Layer 4)
+        if (err?.code === 'P2002') return false;
+        throw err;
+      }
+    },
+
+    async getPayout(payoutId) {
+      return prisma.payout.findUnique({ where: { id: payoutId } });
+    },
+
+    async updatePayoutStatus(payoutId, patch) {
+      await prisma.payout.updateMany({
+        where: { id: payoutId },
+        data: {
+          status: patch.status,
+          ...(patch.providerTransactionId != null ? { providerTransactionId: patch.providerTransactionId } : {}),
+          ...(patch.failureReason != null ? { failureReason: patch.failureReason } : {}),
+          ...(patch.processedAt ? { processedAt: patch.processedAt } : {}),
+          ...(patch.settledAt ? { settledAt: patch.settledAt } : {}),
+        },
+      });
+    },
+
+    async listPayouts(opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+      const offset = Math.max(opts?.offset ?? 0, 0);
+      return prisma.payout.findMany({
+        where: {
+          ...(opts?.referrerUserId ? { referrerUserId: opts.referrerUserId } : {}),
+          ...(opts?.status ? { status: opts.status } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      });
+    },
+
+    async enqueueJob(row) {
+      try {
+        await prisma.commissionJob.create({
+          data: {
+            id: row.id,
+            eventId: row.eventId,
+            jobType: row.jobType,
+            payload: row.payload as unknown as object,
+            status: row.status,
+            attempts: row.attempts,
+            nextRunAt: row.nextRunAt,
+            createdAt: row.createdAt,
+          },
+        });
+        return true;
+      } catch (err: any) {
+        // P2002 = eventId 唯一约束冲突 → webhook 重放,幂等跳过
+        if (err?.code === 'P2002') return false;
+        throw err;
+      }
+    },
+
+    async claimDueJobs(limit, now) {
+      // 逐个 CAS 领取(updateMany 带前置状态条件),规避 Prisma 无 SKIP LOCKED 的限制
+      const due = await prisma.commissionJob.findMany({
+        where: { status: 'PENDING', nextRunAt: { lte: now } },
+        orderBy: { nextRunAt: 'asc' },
+        take: limit,
+      });
+      const claimed: typeof due = [];
+      for (const job of due) {
+        const res = await prisma.commissionJob.updateMany({
+          where: { id: job.id, status: 'PENDING' },
+          data: { status: 'RUNNING' },
+        });
+        if (res.count > 0) claimed.push({ ...job, status: 'RUNNING' });
+      }
+      return claimed;
+    },
+
+    async markJobDone(jobId) {
+      await prisma.commissionJob.updateMany({ where: { id: jobId }, data: { status: 'DONE' } });
+    },
+
+    async markJobFailed(jobId, opts) {
+      await prisma.commissionJob.updateMany({
+        where: { id: jobId },
+        data: { status: opts.dead ? 'DEAD' : 'PENDING', attempts: opts.attempts, nextRunAt: opts.nextRunAt },
+      });
     },
   };
 }

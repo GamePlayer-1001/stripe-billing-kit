@@ -131,3 +131,37 @@ CREATE TABLE IF NOT EXISTS configuration_versions (
   CONSTRAINT uq_config_version UNIQUE (program_id, version_number)
 );
 CREATE INDEX IF NOT EXISTS idx_config_versions_program ON configuration_versions(program_id);
+
+-- 打款记录(4.1 Payout):付佣腿唯一事实来源;idempotency_key 唯一 = Layer 4 防重复打款
+CREATE TABLE IF NOT EXISTS payouts (
+  id                      TEXT PRIMARY KEY,
+  referrer_user_id        TEXT NOT NULL,
+  commission_ids          JSONB NOT NULL,               -- 本次打款覆盖的佣金 ID 列表(批量结算)
+  amount                  INTEGER NOT NULL,             -- cents(各佣金之和)
+  currency                TEXT NOT NULL,
+  fee_amount              INTEGER NOT NULL DEFAULT 0,   -- 通道手续费(如 PayPal $0.25/笔)
+  provider                TEXT NOT NULL,                -- STRIPE_CONNECT / PAYPAL / MANUAL
+  provider_transaction_id TEXT,                         -- 通道侧流水号(对账主键)
+  idempotency_key         TEXT NOT NULL UNIQUE,         -- = payout.id,防重复打款
+  status                  TEXT NOT NULL DEFAULT 'CREATED',  -- CREATED/PROCESSING/SUCCEEDED/FAILED/UNCLAIMED/RETURNED
+  failure_reason          TEXT,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  processed_at            TIMESTAMPTZ,
+  settled_at              TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_payouts_referrer ON payouts(referrer_user_id);
+CREATE INDEX IF NOT EXISTS idx_payouts_status ON payouts(status);
+CREATE INDEX IF NOT EXISTS idx_payouts_provider_txn ON payouts(provider, provider_transaction_id);
+
+-- Outbox 异步任务(5.4.2 webhook 快速响应):event_id 唯一,失败指数退避重试
+CREATE TABLE IF NOT EXISTS commission_jobs (
+  id          TEXT PRIMARY KEY,
+  event_id    TEXT NOT NULL UNIQUE,               -- Stripe event.id,与 claimEvent 联动
+  job_type    TEXT NOT NULL,                      -- CALC_COMMISSION / CLAWBACK / GRANT_PRODUCT / PAYOUT
+  payload     JSONB NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'PENDING',    -- PENDING / RUNNING / DONE / DEAD
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  next_run_at TIMESTAMPTZ NOT NULL DEFAULT now(), -- 指数退避重试
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_commission_jobs_due ON commission_jobs(status, next_run_at);

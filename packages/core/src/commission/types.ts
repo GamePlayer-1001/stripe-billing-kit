@@ -156,6 +156,104 @@ export interface RateBreakdownEntry {
 }
 
 // ──────────────────────────────────────────────────────
+// 打款腿（Phase 2；4.1 Payout 模型 + 6.4 PayoutProvider 适配器）
+// ──────────────────────────────────────────────────────
+
+/** 打款通道：Stripe Connect / PayPal / 线下人工 */
+export type PayoutProviderName = 'STRIPE_CONNECT' | 'PAYPAL' | 'MANUAL';
+
+/** 打款状态机：CREATED → PROCESSING → SUCCEEDED / FAILED / UNCLAIMED → RETURNED */
+export type PayoutStatus =
+  | 'CREATED' // 已创建，待提交通道
+  | 'PROCESSING' // 通道处理中（PayPal 异步）
+  | 'SUCCEEDED' // 打款成功
+  | 'FAILED' // 通道失败，佣金回滚为 APPROVED 可重试
+  | 'UNCLAIMED' // PayPal 收款邮箱未认领
+  | 'RETURNED'; // UNCLAIMED 超期退回，佣金回滚为 APPROVED
+
+/** 打款记录（付佣腿唯一事实来源，与通道侧双向对账） */
+export interface PayoutRow {
+  id: string;
+  referrerUserId: string;
+  /** 本次打款覆盖的佣金 ID 列表（批量结算） */
+  commissionIds: string[];
+  /** cents（各佣金之和） */
+  amount: number;
+  currency: string;
+  /** 通道手续费 cents（如 PayPal $0.25/笔） */
+  feeAmount: number;
+  provider: PayoutProviderName;
+  /** 通道侧流水号（对账主键） */
+  providerTransactionId: string | null;
+  /** = payout.id，防重复打款（Layer 4） */
+  idempotencyKey: string;
+  status: PayoutStatus;
+  failureReason: string | null;
+  createdAt: Date;
+  processedAt: Date | null;
+  settledAt: Date | null;
+}
+
+/** 通道侧流水（对账任务比对内部 Payout 表用） */
+export interface ProviderTransaction {
+  providerTransactionId: string;
+  amount: number;
+  currency: string;
+  status: PayoutStatus;
+  createdAt: Date;
+}
+
+/**
+ * 付佣通道适配器（6.4）：与 StorageAdapter 同风格的抽象层，通道可插拔。
+ * 状态回滚约定由 PayoutService 统一执行，Provider 只汇报状态：
+ * FAILED / RETURNED → 关联 Commission 回滚为 APPROVED（可重新提现）。
+ */
+export interface PayoutProvider {
+  readonly name: PayoutProviderName;
+
+  /** 收款账户就绪检查（Connect: onboarding 完成？PayPal: 邮箱已填？） */
+  isRecipientReady(referrerUserId: string): Promise<{ ready: boolean; missingSteps?: string[] }>;
+
+  /** 发起打款（幂等：同一 idempotencyKey 重复调用不会重复付款） */
+  createPayout(input: {
+    /** 即 idempotencyKey */
+    payoutId: string;
+    referrerUserId: string;
+    amount: number;
+    currency: string;
+  }): Promise<{ providerTransactionId: string; status: PayoutStatus }>;
+
+  /** 查询通道侧状态（PayPal 异步场景轮询用） */
+  getPayoutStatus(providerTransactionId: string): Promise<PayoutStatus>;
+
+  /** 处理通道回调事件（Connect webhook / PayPal IPN），返回状态变更；无关事件返回 null */
+  handleProviderEvent(rawEvent: unknown): Promise<{ payoutId: string; status: PayoutStatus } | null>;
+
+  /** 对账：拉取通道侧指定时段流水，供双向对账任务比对内部 Payout 表 */
+  listTransactions(from: Date, to: Date): Promise<ProviderTransaction[]>;
+}
+
+// ──────────────────────────────────────────────────────
+// Outbox 异步任务（5.4.2 webhook 快速响应模式）
+// ──────────────────────────────────────────────────────
+
+export type CommissionJobType = 'CALC_COMMISSION' | 'CLAWBACK' | 'GRANT_PRODUCT' | 'PAYOUT';
+export type CommissionJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'DEAD';
+
+export interface CommissionJobRow {
+  id: string;
+  /** Stripe event.id，唯一（与 claimEvent 联动防重复投递） */
+  eventId: string;
+  jobType: CommissionJobType;
+  payload: Record<string, unknown>;
+  status: CommissionJobStatus;
+  attempts: number;
+  /** 指数退避重试时间 */
+  nextRunAt: Date;
+  createdAt: Date;
+}
+
+// ──────────────────────────────────────────────────────
 // 存储抽象（core 只依赖此接口）
 // ──────────────────────────────────────────────────────
 
@@ -249,6 +347,38 @@ export interface CommissionStorage {
    * paidThisMonthCents 以佣金 createdAt 落在本月近似（精确打款时间待 Payout 腿 processedAt）。
    */
   getReferralStats(referrerUserId: string, opts?: { monthStart?: Date }): Promise<ReferralStatsRow>;
+
+  // 打款记录（Phase 2 付佣腿；4.1 Payout 模型）
+  /** 幂等插入打款记录；idempotencyKey 唯一冲突返回 false（防重复打款，Layer 4） */
+  insertPayout(row: PayoutRow): Promise<boolean>;
+  getPayout(payoutId: string): Promise<PayoutRow | null>;
+  /** 更新打款状态与通道回执（状态机流转由 PayoutService 把关，存储层只负责落值） */
+  updatePayoutStatus(
+    payoutId: string,
+    patch: {
+      status: PayoutStatus;
+      providerTransactionId?: string;
+      failureReason?: string;
+      processedAt?: Date;
+      settledAt?: Date;
+    },
+  ): Promise<void>;
+  /** 打款列表分页（createdAt 倒序），供管理端对账 */
+  listPayouts(opts?: {
+    referrerUserId?: string;
+    status?: PayoutStatus;
+    limit?: number;
+    offset?: number;
+  }): Promise<PayoutRow[]>;
+
+  // Outbox 异步任务（5.4.2 webhook 快速响应；MVP = DB outbox + 轮询 worker）
+  /** 幂等入队；eventId 唯一冲突返回 false（与 claimEvent 联动防重复投递） */
+  enqueueJob(row: CommissionJobRow): Promise<boolean>;
+  /** 领取到期任务并原子标记 RUNNING（多 worker 场景需 SKIP LOCKED 语义防重复领取） */
+  claimDueJobs(limit: number, now: Date): Promise<CommissionJobRow[]>;
+  markJobDone(jobId: string): Promise<void>;
+  /** 失败回写：attempts+1 + 指数退避 nextRunAt；dead=true 时标记 DEAD 不再重试 */
+  markJobFailed(jobId: string, opts: { attempts: number; nextRunAt: Date; dead: boolean }): Promise<void>;
 }
 
 // ──────────────────────────────────────────────────────

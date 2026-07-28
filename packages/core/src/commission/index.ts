@@ -44,6 +44,14 @@ export type {
   AuditQueueItemRow,
   ConfigVersionRow,
   ReferralStatsRow,
+  PayoutProviderName,
+  PayoutStatus,
+  PayoutRow,
+  ProviderTransaction,
+  PayoutProvider,
+  CommissionJobType,
+  CommissionJobStatus,
+  CommissionJobRow,
 } from './types.js';
 
 // 存储
@@ -98,3 +106,22 @@ export {
   type ReferralStreamEvent,
   type ReferralEventListener,
 } from './stream-events.js';
+
+// 打款腿（Phase 2：PayoutProvider 通道适配 + 结算服务）
+export {
+  PayoutService,
+  ManualPayoutProvider,
+  type PayoutServiceOptions,
+  type CreatePayoutInput,
+  type CreatePayoutResult,
+} from './payouts.js';
+
+// Outbox 异步任务（5.4.2 webhook 快速响应）
+export {
+  enqueueCommissionJob,
+  processCommissionJobs,
+  type CommissionJobHandlers,
+  type EnqueueCommissionJobInput,
+  type ProcessJobsOptions,
+  type ProcessJobsResult,
+} from './jobs.js';

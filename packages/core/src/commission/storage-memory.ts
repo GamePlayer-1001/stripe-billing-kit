@@ -4,11 +4,14 @@
  */
 import type {
   AuditQueueItemRow,
+  CommissionJobRow,
   CommissionRow,
   CommissionRuleRow,
   CommissionStatus,
   CommissionStorage,
   ConfigVersionRow,
+  PayoutRow,
+  PayoutStatus,
   QueueStatus,
   ReferralCodeRow,
   ReferralRelationshipRow,
@@ -25,6 +28,10 @@ export class InMemoryCommissionStorage implements CommissionStorage {
   private commissionKeys = new Set<string>(); // 幂等键 orderId|referrer|tier
   private auditQueue = new Map<string, AuditQueueItemRow>(); // commissionId -> item
   private configVersions: ConfigVersionRow[] = [];
+  private payouts = new Map<string, PayoutRow>(); // id -> row
+  private payoutIdemKeys = new Set<string>(); // idempotencyKey 唯一
+  private jobs = new Map<string, CommissionJobRow>(); // id -> row
+  private jobEventIds = new Set<string>(); // eventId 唯一
 
   // ── 邀请码 ──
   async getReferralCodeByCode(code: string): Promise<ReferralCodeRow | null> {
@@ -243,6 +250,78 @@ export class InMemoryCommissionStorage implements CommissionStorage {
       pendingCents,
       paidThisMonthCents,
     };
+  }
+
+  // ── 打款记录 ──
+  async insertPayout(row: PayoutRow): Promise<boolean> {
+    if (this.payoutIdemKeys.has(row.idempotencyKey)) return false; // Layer 4：幂等键冲突
+    this.payoutIdemKeys.add(row.idempotencyKey);
+    this.payouts.set(row.id, { ...row, commissionIds: [...row.commissionIds] });
+    return true;
+  }
+  async getPayout(payoutId: string): Promise<PayoutRow | null> {
+    const row = this.payouts.get(payoutId);
+    return row ? { ...row, commissionIds: [...row.commissionIds] } : null;
+  }
+  async updatePayoutStatus(
+    payoutId: string,
+    patch: {
+      status: PayoutStatus;
+      providerTransactionId?: string;
+      failureReason?: string;
+      processedAt?: Date;
+      settledAt?: Date;
+    },
+  ): Promise<void> {
+    const row = this.payouts.get(payoutId);
+    if (!row) return;
+    row.status = patch.status;
+    if (patch.providerTransactionId != null) row.providerTransactionId = patch.providerTransactionId;
+    if (patch.failureReason != null) row.failureReason = patch.failureReason;
+    if (patch.processedAt) row.processedAt = patch.processedAt;
+    if (patch.settledAt) row.settledAt = patch.settledAt;
+  }
+  async listPayouts(opts?: {
+    referrerUserId?: string;
+    status?: PayoutStatus;
+    limit?: number;
+    offset?: number;
+  }): Promise<PayoutRow[]> {
+    const limit = opts?.limit ?? 20;
+    const offset = opts?.offset ?? 0;
+    return [...this.payouts.values()]
+      .filter((p) => !opts?.referrerUserId || p.referrerUserId === opts.referrerUserId)
+      .filter((p) => !opts?.status || p.status === opts.status)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(offset, offset + limit)
+      .map((p) => ({ ...p, commissionIds: [...p.commissionIds] }));
+  }
+
+  // ── Outbox 任务 ──
+  async enqueueJob(row: CommissionJobRow): Promise<boolean> {
+    if (this.jobEventIds.has(row.eventId)) return false; // eventId 唯一：重放不重复入队
+    this.jobEventIds.add(row.eventId);
+    this.jobs.set(row.id, { ...row });
+    return true;
+  }
+  async claimDueJobs(limit: number, now: Date): Promise<CommissionJobRow[]> {
+    const due = [...this.jobs.values()]
+      .filter((j) => j.status === 'PENDING' && j.nextRunAt <= now)
+      .sort((a, b) => a.nextRunAt.getTime() - b.nextRunAt.getTime())
+      .slice(0, limit);
+    for (const j of due) j.status = 'RUNNING'; // 原子领取
+    return due.map((j) => ({ ...j }));
+  }
+  async markJobDone(jobId: string): Promise<void> {
+    const j = this.jobs.get(jobId);
+    if (j) j.status = 'DONE';
+  }
+  async markJobFailed(jobId: string, opts: { attempts: number; nextRunAt: Date; dead: boolean }): Promise<void> {
+    const j = this.jobs.get(jobId);
+    if (!j) return;
+    j.attempts = opts.attempts;
+    j.nextRunAt = opts.nextRunAt;
+    j.status = opts.dead ? 'DEAD' : 'PENDING';
   }
 
   // ── 测试辅助 ──
