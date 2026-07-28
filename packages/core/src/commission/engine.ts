@@ -31,7 +31,10 @@ const DEFAULT_PERCENT_RATE = 0.029;
 const DEFAULT_FIXED_CENTS = 30;
 
 /** Stripe 手续费 = 百分比 + 固定费（附录 B：2.9% + $0.30） */
-export function calculateStripeFee(amountCents: number, config: CommissionConfig): number {
+export function calculateStripeFee(
+  amountCents: number,
+  config: Pick<CommissionConfig, 'stripeFee'>,
+): number {
   const percentRate = config.stripeFee?.percentRate ?? DEFAULT_PERCENT_RATE;
   const fixedCents = config.stripeFee?.fixedCents ?? DEFAULT_FIXED_CENTS;
   return Math.round(amountCents * percentRate) + fixedCents;

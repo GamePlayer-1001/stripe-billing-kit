@@ -164,6 +164,22 @@ export {
   type MonthlyPayoutReport,
 } from './payout-reconcile.js';
 
+// Wizard 智能辅助（8.3：示例配方库 / 盈亏预估 / Linter 式配置校验）
+export {
+  EXAMPLE_RECIPES,
+  estimateProfitability,
+  lintCommissionConfig,
+  type Recipe,
+  type RecipeRule,
+  type ProfitEstimateOptions,
+  type ProfitEstimate,
+  type ProfitHealth,
+  type LintLevel,
+  type ConfigLintIssue,
+  type ConfigLintOptions,
+  type ConfigLintReport,
+} from './config-linter.js';
+
 // Outbox 异步任务（5.4.2 webhook 快速响应）
 export {
   enqueueCommissionJob,
