@@ -133,3 +133,19 @@ CREATE TABLE IF NOT EXISTS audit_queue_items (
   UNIQUE KEY uq_audit_commission (commission_id),
   KEY idx_audit_queue_status (status, risk_score)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 配置版本快照（8.2 版本控制）：(program_id, version_number) 唯一，快照 = 当时生效规则集
+CREATE TABLE IF NOT EXISTS configuration_versions (
+  id             VARCHAR(64)  NOT NULL,
+  program_id     VARCHAR(100) NOT NULL,
+  version_number INT          NOT NULL,
+  snapshot       JSON         NOT NULL COMMENT '{ rules: CommissionRuleRow[] }',
+  notes          TEXT         NULL,
+  created_by     VARCHAR(255) NULL COMMENT '操作管理员 ID',
+  created_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  activated_at   DATETIME(3)  NULL,
+  is_latest      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '当前生效版本（同一 program 至多一个 1）',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_config_version (program_id, version_number),
+  KEY idx_config_versions_program (program_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

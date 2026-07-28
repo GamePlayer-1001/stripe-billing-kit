@@ -171,6 +171,7 @@ export type {
   ReviewTrigger,
   QueueStatus,
   AuditQueueItemRow,
+  ConfigVersionRow,
   AutoReviewRules,
   AutoReviewInput,
   AutoReviewResult,

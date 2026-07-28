@@ -17,6 +17,7 @@ import type {
   CommissionRuleRow,
   CommissionRow,
   CommissionStatus,
+  ConfigVersionRow,
   DriverVariable,
   GrantStatus,
   RateBreakdownEntry,
@@ -200,6 +201,11 @@ export class CommissionEngine {
     return this.config.storage;
   }
 
+  /** 佣金计划 ID（REST 端点层查询配置版本用） */
+  get programId() {
+    return this.config.programId;
+  }
+
   /**
    * 退款追回（5.3 charge.refunded → clawback）：
    * - PENDING/APPROVED → REFUNDED（存储层带前置状态条件，天然幂等：重放时回转 0 条）
@@ -268,6 +274,57 @@ export class CommissionEngine {
       this.logger?.warn('commission.payout.mark_paid_rejected_by_state', { commissionId });
     }
     return ok;
+  }
+
+  /**
+   * 保存当前配置快照为新版本（8.2 版本控制）。
+   * 快照内容 = 当前生效规则集；新版本即当前生效配置，自动标记为 latest。
+   * @returns 版本行；null = 版本号并发冲突（罕见，管理端重试即可）
+   */
+  async snapshotConfigVersion(opts?: { notes?: string; createdBy?: string }): Promise<ConfigVersionRow | null> {
+    const storage = this.config.storage;
+    const programId = this.config.programId;
+    const now = new Date();
+    const rules = await storage.listActiveRules(programId);
+    const versionNumber = (await storage.getMaxConfigVersionNumber(programId)) + 1;
+    const row: ConfigVersionRow = {
+      id: randomUUID(),
+      programId,
+      versionNumber,
+      snapshot: { rules },
+      notes: opts?.notes ?? null,
+      createdBy: opts?.createdBy ?? null,
+      createdAt: now,
+      activatedAt: now,
+      isLatest: true,
+    };
+    const inserted = await storage.insertConfigVersion(row);
+    if (!inserted) {
+      this.logger?.warn('commission.config.version_conflict', { programId, versionNumber });
+      return null;
+    }
+    await storage.markConfigVersionActive(programId, versionNumber, now);
+    this.logger?.info('commission.config.snapshot_created', { programId, versionNumber });
+    return row;
+  }
+
+  /**
+   * 激活/回滚到指定版本：把快照内规则整体替换回规则表，并标记该版本为 latest。
+   * 只影响未来订单的计佣；历史佣金记录（含 rateBreakdown 快照）不受影响。
+   * @returns false = 版本不存在
+   */
+  async activateConfigVersion(versionNumber: number): Promise<boolean> {
+    const storage = this.config.storage;
+    const programId = this.config.programId;
+    const version = await storage.getConfigVersion(programId, versionNumber);
+    if (!version) {
+      this.logger?.warn('commission.config.version_not_found', { programId, versionNumber });
+      return false;
+    }
+    await storage.replaceRules(programId, version.snapshot.rules);
+    await storage.markConfigVersionActive(programId, versionNumber, new Date());
+    this.logger?.info('commission.config.version_activated', { programId, versionNumber });
+    return true;
   }
 
   /**

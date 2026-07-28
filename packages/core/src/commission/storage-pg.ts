@@ -4,6 +4,7 @@ import type {
   CommissionRow,
   CommissionRuleRow,
   CommissionStorage,
+  ConfigVersionRow,
   ReferralCodeRow,
   ReferralRelationshipRow,
 } from './types.js';
@@ -64,6 +65,20 @@ function toAuditRow(r: any): AuditQueueItemRow {
     reviewedAt: r.reviewed_at ? new Date(r.reviewed_at) : null,
     reviewNotes: r.review_notes ?? null,
     createdAt: new Date(r.created_at),
+  };
+}
+
+function toVersionRow(r: any): ConfigVersionRow {
+  return {
+    id: r.id,
+    programId: r.program_id,
+    versionNumber: r.version_number,
+    snapshot: r.snapshot ?? { rules: [] },
+    notes: r.notes ?? null,
+    createdBy: r.created_by ?? null,
+    createdAt: new Date(r.created_at),
+    activatedAt: r.activated_at ? new Date(r.activated_at) : null,
+    isLatest: r.is_latest,
   };
 }
 
@@ -305,6 +320,96 @@ export function pgCommissionStorage(db: PgLike): CommissionStorage {
          WHERE commission_id = $1`,
         [commissionId, status, opts?.reviewedAt ?? null, opts?.reviewNotes ?? null],
       );
+    },
+
+    async insertConfigVersion(row) {
+      // (program_id, version_number) 唯一约束:并发创建冲突时静默返回 false
+      const { rowCount } = await db.query(
+        `INSERT INTO configuration_versions
+           (id, program_id, version_number, snapshot, notes, created_by, created_at, activated_at, is_latest)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (program_id, version_number) DO NOTHING`,
+        [
+          row.id,
+          row.programId,
+          row.versionNumber,
+          JSON.stringify(row.snapshot),
+          row.notes,
+          row.createdBy,
+          row.createdAt,
+          row.activatedAt,
+          row.isLatest,
+        ],
+      );
+      return (rowCount ?? 0) > 0;
+    },
+
+    async getMaxConfigVersionNumber(programId) {
+      const { rows } = await db.query(
+        'SELECT COALESCE(MAX(version_number), 0)::int AS max FROM configuration_versions WHERE program_id = $1',
+        [programId],
+      );
+      return rows[0]?.max ?? 0;
+    },
+
+    async listConfigVersions(programId, opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+      const offset = Math.max(opts?.offset ?? 0, 0);
+      const { rows } = await db.query(
+        `SELECT id, program_id, version_number, snapshot, notes, created_by, created_at, activated_at, is_latest
+         FROM configuration_versions WHERE program_id = $1
+         ORDER BY version_number DESC LIMIT $2 OFFSET $3`,
+        [programId, limit, offset],
+      );
+      return rows.map(toVersionRow);
+    },
+
+    async getConfigVersion(programId, versionNumber) {
+      const { rows } = await db.query(
+        `SELECT id, program_id, version_number, snapshot, notes, created_by, created_at, activated_at, is_latest
+         FROM configuration_versions WHERE program_id = $1 AND version_number = $2`,
+        [programId, versionNumber],
+      );
+      const row = rows[0];
+      return row ? toVersionRow(row) : null;
+    },
+
+    async markConfigVersionActive(programId, versionNumber, activatedAt) {
+      await db.query('UPDATE configuration_versions SET is_latest = false WHERE program_id = $1', [programId]);
+      await db.query(
+        `UPDATE configuration_versions SET is_latest = true, activated_at = $3
+         WHERE program_id = $1 AND version_number = $2`,
+        [programId, versionNumber, activatedAt],
+      );
+    },
+
+    async replaceRules(programId, rules) {
+      // 回滚应用快照:整体替换该 program 的规则(建议产品侧在事务内调用)
+      await db.query('DELETE FROM commission_rules WHERE program_id = $1', [programId]);
+      for (const r of rules) {
+        await db.query(
+          `INSERT INTO commission_rules
+             (id, program_id, plan_key, trigger_scope, tier_level, components, commission_base,
+              platform_fee_handling_mode, hold_period_days, auto_approve_under_cents,
+              require_review_over_cents, is_active, priority)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          [
+            r.id,
+            r.programId,
+            r.planKey,
+            r.triggerScope,
+            r.tierLevel,
+            JSON.stringify(r.components),
+            r.commissionBase,
+            r.platformFeeHandlingMode,
+            r.holdPeriodDays,
+            r.autoApproveUnderCents,
+            r.requireReviewOverCents,
+            r.isActive,
+            r.priority,
+          ],
+        );
+      }
     },
   };
 }

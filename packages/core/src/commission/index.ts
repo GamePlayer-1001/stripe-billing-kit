@@ -42,6 +42,7 @@ export type {
   ReviewTrigger,
   QueueStatus,
   AuditQueueItemRow,
+  ConfigVersionRow,
 } from './types.js';
 
 // 存储

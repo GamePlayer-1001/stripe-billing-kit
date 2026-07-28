@@ -10,6 +10,7 @@ export interface PrismaCommissionLike {
   commissionRule: any;
   commission: any;
   auditQueueItem: any;
+  configurationVersion: any;
 }
 
 export function prismaCommissionStorage(prisma: PrismaCommissionLike): CommissionStorage {
@@ -190,6 +191,88 @@ export function prismaCommissionStorage(prisma: PrismaCommissionLike): Commissio
           ...(opts?.reviewNotes != null ? { reviewNotes: opts.reviewNotes } : {}),
         },
       });
+    },
+
+    async insertConfigVersion(row) {
+      try {
+        await prisma.configurationVersion.create({
+          data: {
+            id: row.id,
+            programId: row.programId,
+            versionNumber: row.versionNumber,
+            snapshot: row.snapshot as unknown as object,
+            notes: row.notes,
+            createdBy: row.createdBy,
+            createdAt: row.createdAt,
+            activatedAt: row.activatedAt,
+            isLatest: row.isLatest,
+          },
+        });
+        return true;
+      } catch (err: any) {
+        // P2002 = (programId, versionNumber) 唯一约束冲突 → 并发创建,调用方重试
+        if (err?.code === 'P2002') return false;
+        throw err;
+      }
+    },
+
+    async getMaxConfigVersionNumber(programId) {
+      const latest = await prisma.configurationVersion.findFirst({
+        where: { programId },
+        orderBy: { versionNumber: 'desc' },
+        select: { versionNumber: true },
+      });
+      return latest?.versionNumber ?? 0;
+    },
+
+    async listConfigVersions(programId, opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+      const offset = Math.max(opts?.offset ?? 0, 0);
+      return prisma.configurationVersion.findMany({
+        where: { programId },
+        orderBy: { versionNumber: 'desc' },
+        take: limit,
+        skip: offset,
+      });
+    },
+
+    async getConfigVersion(programId, versionNumber) {
+      return prisma.configurationVersion.findFirst({ where: { programId, versionNumber } });
+    },
+
+    async markConfigVersionActive(programId, versionNumber, activatedAt) {
+      await prisma.configurationVersion.updateMany({
+        where: { programId },
+        data: { isLatest: false },
+      });
+      await prisma.configurationVersion.updateMany({
+        where: { programId, versionNumber },
+        data: { isLatest: true, activatedAt },
+      });
+    },
+
+    async replaceRules(programId, rules) {
+      // 回滚应用快照:整体替换该 program 的规则(建议产品侧在事务内调用)
+      await prisma.commissionRule.deleteMany({ where: { programId } });
+      for (const r of rules) {
+        await prisma.commissionRule.create({
+          data: {
+            id: r.id,
+            programId: r.programId,
+            planKey: r.planKey,
+            triggerScope: r.triggerScope,
+            tierLevel: r.tierLevel,
+            components: r.components as unknown as object,
+            commissionBase: r.commissionBase,
+            platformFeeHandlingMode: r.platformFeeHandlingMode,
+            holdPeriodDays: r.holdPeriodDays,
+            autoApproveUnderCents: r.autoApproveUnderCents,
+            requireReviewOverCents: r.requireReviewOverCents,
+            isActive: r.isActive,
+            priority: r.priority,
+          },
+        });
+      }
     },
   };
 }

@@ -8,6 +8,7 @@ import type {
   CommissionRuleRow,
   CommissionStatus,
   CommissionStorage,
+  ConfigVersionRow,
   QueueStatus,
   ReferralCodeRow,
   ReferralRelationshipRow,
@@ -22,6 +23,7 @@ export class InMemoryCommissionStorage implements CommissionStorage {
   private commissions = new Map<string, CommissionRow>(); // id -> row
   private commissionKeys = new Set<string>(); // 幂等键 orderId|referrer|tier
   private auditQueue = new Map<string, AuditQueueItemRow>(); // commissionId -> item
+  private configVersions: ConfigVersionRow[] = [];
 
   // ── 邀请码 ──
   async getReferralCodeByCode(code: string): Promise<ReferralCodeRow | null> {
@@ -68,8 +70,8 @@ export class InMemoryCommissionStorage implements CommissionStorage {
   }
 
   // ── 佣金规则 ──
-  async listActiveRules(): Promise<CommissionRuleRow[]> {
-    return this.rules.filter((r) => r.isActive).map((r) => ({ ...r }));
+  async listActiveRules(programId: string): Promise<CommissionRuleRow[]> {
+    return this.rules.filter((r) => r.isActive && r.programId === programId).map((r) => ({ ...r }));
   }
   /** 测试辅助：注入规则 */
   addRule(rule: CommissionRuleRow): void {
@@ -164,6 +166,46 @@ export class InMemoryCommissionStorage implements CommissionStorage {
     item.status = status;
     if (opts?.reviewedAt) item.reviewedAt = opts.reviewedAt;
     if (opts?.reviewNotes != null) item.reviewNotes = opts.reviewNotes;
+  }
+
+  // ── 配置版本 ──
+  async insertConfigVersion(row: ConfigVersionRow): Promise<boolean> {
+    if (this.configVersions.some((v) => v.programId === row.programId && v.versionNumber === row.versionNumber)) {
+      return false; // (programId, versionNumber) 唯一
+    }
+    this.configVersions.push({ ...row, snapshot: structuredClone(row.snapshot) });
+    return true;
+  }
+  async getMaxConfigVersionNumber(programId: string): Promise<number> {
+    return this.configVersions
+      .filter((v) => v.programId === programId)
+      .reduce((max, v) => Math.max(max, v.versionNumber), 0);
+  }
+  async listConfigVersions(
+    programId: string,
+    opts?: { limit?: number; offset?: number },
+  ): Promise<ConfigVersionRow[]> {
+    const limit = opts?.limit ?? 20;
+    const offset = opts?.offset ?? 0;
+    return this.configVersions
+      .filter((v) => v.programId === programId)
+      .sort((a, b) => b.versionNumber - a.versionNumber)
+      .slice(offset, offset + limit)
+      .map((v) => ({ ...v, snapshot: structuredClone(v.snapshot) }));
+  }
+  async getConfigVersion(programId: string, versionNumber: number): Promise<ConfigVersionRow | null> {
+    const v = this.configVersions.find((x) => x.programId === programId && x.versionNumber === versionNumber);
+    return v ? { ...v, snapshot: structuredClone(v.snapshot) } : null;
+  }
+  async markConfigVersionActive(programId: string, versionNumber: number, activatedAt: Date): Promise<void> {
+    for (const v of this.configVersions) {
+      if (v.programId !== programId) continue;
+      v.isLatest = v.versionNumber === versionNumber;
+      if (v.isLatest) v.activatedAt = activatedAt;
+    }
+  }
+  async replaceRules(programId: string, rules: CommissionRuleRow[]): Promise<void> {
+    this.rules = this.rules.filter((r) => r.programId !== programId).concat(rules.map((r) => ({ ...r })));
   }
 
   // ── 测试辅助 ──

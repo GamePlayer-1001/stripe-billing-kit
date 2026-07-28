@@ -116,3 +116,18 @@ CREATE TABLE IF NOT EXISTS audit_queue_items (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_audit_queue_status ON audit_queue_items(status, risk_score DESC);
+
+-- 配置版本快照(8.2 版本控制):(program_id, version_number) 唯一,快照 = 当时生效规则集
+CREATE TABLE IF NOT EXISTS configuration_versions (
+  id             TEXT PRIMARY KEY,
+  program_id     TEXT NOT NULL,
+  version_number INTEGER NOT NULL,
+  snapshot       JSONB NOT NULL,                 -- { rules: CommissionRuleRow[] }
+  notes          TEXT,
+  created_by     TEXT,                           -- 操作管理员 ID
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  activated_at   TIMESTAMPTZ,
+  is_latest      BOOLEAN NOT NULL DEFAULT false, -- 当前生效版本(同一 program 至多一个 true)
+  CONSTRAINT uq_config_version UNIQUE (program_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS idx_config_versions_program ON configuration_versions(program_id);

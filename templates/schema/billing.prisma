@@ -135,3 +135,20 @@ model AuditQueueItem {
   @@index([status, riskScore])
   @@map("audit_queue_items")
 }
+
+// 配置版本快照(8.2 版本控制):(programId, versionNumber) 唯一,快照 = 当时生效规则集
+model ConfigurationVersion {
+  id            String    @id
+  programId     String    @map("program_id")
+  versionNumber Int       @map("version_number")
+  snapshot      Json // { rules: CommissionRuleRow[] }
+  notes         String?
+  createdBy     String?   @map("created_by") // 操作管理员 ID
+  createdAt     DateTime  @default(now()) @map("created_at")
+  activatedAt   DateTime? @map("activated_at")
+  isLatest      Boolean   @default(false) @map("is_latest") // 当前生效版本(同一 program 至多一个 true)
+
+  @@unique([programId, versionNumber])
+  @@index([programId])
+  @@map("configuration_versions")
+}

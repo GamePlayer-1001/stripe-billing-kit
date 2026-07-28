@@ -131,5 +131,35 @@ export async function handleCommissionRequest(
     return json(200, { ok: true, action: body.action });
   }
 
+  // ── GET/POST admin/config/versions：配置版本列表 / 保存快照（管理员） ──
+  if (route === 'GET admin/config/versions') {
+    if (!req.isAdmin) return forbidden();
+    const { limit, offset } = parsePagination(req.query);
+    const items = await engine.storage.listConfigVersions(engine.programId, { limit, offset });
+    return json(200, { items, limit, offset });
+  }
+  if (route === 'POST admin/config/versions') {
+    if (!req.isAdmin) return forbidden();
+    const body = (req.jsonBody ?? {}) as { notes?: unknown };
+    const version = await engine.snapshotConfigVersion({
+      notes: typeof body.notes === 'string' ? body.notes : undefined,
+      createdBy: req.userId ?? undefined,
+    });
+    if (!version) {
+      return json(409, { error: 'version_conflict', message: '版本号冲突，请重试' });
+    }
+    return json(200, version);
+  }
+
+  // ── POST admin/config/versions/:n/activate：激活/回滚指定版本（管理员） ──
+  const mActivate = method === 'POST' ? path.match(/^admin\/config\/versions\/(\d+)\/activate$/) : null;
+  if (mActivate) {
+    if (!req.isAdmin) return forbidden();
+    const versionNumber = Number(mActivate[1]);
+    const ok = await engine.activateConfigVersion(versionNumber);
+    if (!ok) return json(404, { error: 'version_not_found', message: `版本 ${versionNumber} 不存在` });
+    return json(200, { activated: true, versionNumber });
+  }
+
   return null;
 }

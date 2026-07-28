@@ -223,6 +223,22 @@ export interface CommissionStorage {
     status: QueueStatus,
     opts?: { reviewedAt?: Date; reviewNotes?: string },
   ): Promise<void>;
+
+  // 配置版本（8.2 快照/回滚）
+  /** 插入版本快照；(programId, versionNumber) 唯一，冲突返回 false（并发创建时由调用方重试/报错） */
+  insertConfigVersion(row: ConfigVersionRow): Promise<boolean>;
+  /** 当前最大版本号（无版本返回 0），新建快照时 +1 */
+  getMaxConfigVersionNumber(programId: string): Promise<number>;
+  /** 版本列表分页（versionNumber 倒序） */
+  listConfigVersions(
+    programId: string,
+    opts?: { limit?: number; offset?: number },
+  ): Promise<ConfigVersionRow[]>;
+  getConfigVersion(programId: string, versionNumber: number): Promise<ConfigVersionRow | null>;
+  /** 标记指定版本为当前生效（isLatest=true + activatedAt），其余版本 isLatest=false */
+  markConfigVersionActive(programId: string, versionNumber: number, activatedAt: Date): Promise<void>;
+  /** 用快照规则整体替换该 program 的规则表（回滚应用快照） */
+  replaceRules(programId: string, rules: CommissionRuleRow[]): Promise<void>;
 }
 
 // ──────────────────────────────────────────────────────
@@ -254,6 +270,28 @@ export interface AuditQueueItemRow {
   reviewedAt: Date | null;
   reviewNotes: string | null;
   createdAt: Date;
+}
+
+// ──────────────────────────────────────────────────────
+// 配置版本快照（8.2 版本控制：快照保存 / 切换回滚 / 变更审计）
+// ──────────────────────────────────────────────────────
+
+export interface ConfigVersionRow {
+  id: string;
+  programId: string;
+  /** program 内自增版本号；(programId, versionNumber) 唯一 */
+  versionNumber: number;
+  /** 完整配置快照：当前生效的规则集（回滚时整体替换回规则表） */
+  snapshot: { rules: CommissionRuleRow[] };
+  /** 变更说明 */
+  notes: string | null;
+  /** 操作管理员 ID */
+  createdBy: string | null;
+  createdAt: Date;
+  /** 最近一次被激活（成为生效配置）的时间 */
+  activatedAt: Date | null;
+  /** 是否为当前生效版本（同一 program 至多一个 true） */
+  isLatest: boolean;
 }
 
 // ──────────────────────────────────────────────────────
