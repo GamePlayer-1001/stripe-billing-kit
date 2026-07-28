@@ -140,6 +140,9 @@ export {
   InMemoryReferralEventBus,
   PayoutService,
   ManualPayoutProvider,
+  StripeConnectProvider,
+  PayPalProvider,
+  mapPayPalStatus,
   enqueueCommissionJob,
   processCommissionJobs,
 } from './commission/index.js';
@@ -193,6 +196,8 @@ export type {
   PeriodicAuditOptions,
   HighRiskReferrer,
   FraudReport,
+  StripeConnectProviderOptions,
+  PayPalProviderOptions,
   ReferralEventBus,
   ReferralStreamEvent,
   ReferralEventListener,

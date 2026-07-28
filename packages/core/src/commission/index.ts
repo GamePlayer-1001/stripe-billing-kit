@@ -136,6 +136,13 @@ export {
   type CreatePayoutResult,
 } from './payouts.js';
 
+// 真实打款通道（Phase 3：Stripe Connect 转账 + PayPal Payouts）
+export {
+  StripeConnectProvider,
+  type StripeConnectProviderOptions,
+} from './provider-stripe-connect.js';
+export { PayPalProvider, mapPayPalStatus, type PayPalProviderOptions } from './provider-paypal.js';
+
 // Outbox 异步任务（5.4.2 webhook 快速响应）
 export {
   enqueueCommissionJob,
