@@ -99,6 +99,18 @@ export {
   type AutoReviewResult,
 } from './audit.js';
 
+// 反作弊风险评分（7.2：综合风险画像纯函数）
+export {
+  calculateRiskScore,
+  collectRiskFactors,
+  DEFAULT_FRAUD_THRESHOLDS,
+  type FraudDetectionMetrics,
+  type FraudScoreThresholds,
+  type RiskAssessment,
+  type RiskLevel,
+  type RiskAction,
+} from './fraud.js';
+
 // 实时事件总线（6.3 SSE；适配层 SSE 端点订阅）
 export {
   InMemoryReferralEventBus,
