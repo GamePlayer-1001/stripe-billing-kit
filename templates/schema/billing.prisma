@@ -118,3 +118,20 @@ model Commission {
   @@index([referrerUserId, status])
   @@map("commissions")
 }
+
+// 人工审核队列(7.1 Level 2):commissionId 唯一,重复入队由 P2002 拦截
+model AuditQueueItem {
+  id           String    @id
+  commissionId String    @unique @map("commission_id")
+  reason       String // HIGH_AMOUNT / RAPID_GROWTH / SAME_DEVICE / ...
+  riskScore    Int       @default(0) @map("risk_score") // 0-100
+  riskFactors  Json?     @map("risk_factors") // ["high_amount", "temp_email"]
+  status       String    @default("PENDING") // PENDING / IN_PROGRESS / APPROVED / REJECTED / ESCALATED
+  assignedTo   String?   @map("assigned_to")
+  reviewedAt   DateTime? @map("reviewed_at")
+  reviewNotes  String?   @map("review_notes")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([status, riskScore])
+  @@map("audit_queue_items")
+}

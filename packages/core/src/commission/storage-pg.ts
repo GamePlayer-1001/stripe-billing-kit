@@ -1,5 +1,6 @@
 import type { PgLike } from '../storage/pg.js';
 import type {
+  AuditQueueItemRow,
   CommissionRow,
   CommissionRuleRow,
   CommissionStorage,
@@ -47,6 +48,21 @@ function toCommissionRow(r: any): CommissionRow {
     status: r.status,
     reviewStatus: r.review_status,
     validUntil: new Date(r.valid_until),
+    createdAt: new Date(r.created_at),
+  };
+}
+
+function toAuditRow(r: any): AuditQueueItemRow {
+  return {
+    id: r.id,
+    commissionId: r.commission_id,
+    reason: r.reason,
+    riskScore: r.risk_score,
+    riskFactors: r.risk_factors ?? [],
+    status: r.status,
+    assignedTo: r.assigned_to ?? null,
+    reviewedAt: r.reviewed_at ? new Date(r.reviewed_at) : null,
+    reviewNotes: r.review_notes ?? null,
     createdAt: new Date(r.created_at),
   };
 }
@@ -241,6 +257,54 @@ export function pgCommissionStorage(db: PgLike): CommissionStorage {
         [commissionId, from, to],
       );
       return (rowCount ?? 0) > 0;
+    },
+
+    async insertAuditQueueItem(row) {
+      // commission_id 唯一约束:重复入队静默跳过
+      const { rowCount } = await db.query(
+        `INSERT INTO audit_queue_items
+           (id, commission_id, reason, risk_score, risk_factors, status, assigned_to, reviewed_at, review_notes, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (commission_id) DO NOTHING`,
+        [
+          row.id,
+          row.commissionId,
+          row.reason,
+          row.riskScore,
+          JSON.stringify(row.riskFactors),
+          row.status,
+          row.assignedTo,
+          row.reviewedAt,
+          row.reviewNotes,
+          row.createdAt,
+        ],
+      );
+      return (rowCount ?? 0) > 0;
+    },
+
+    async listAuditQueue(opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+      const offset = Math.max(opts?.offset ?? 0, 0);
+      const where = opts?.status ? 'WHERE status = $3' : '';
+      const values: unknown[] = [limit, offset];
+      if (opts?.status) values.push(opts.status);
+      const { rows } = await db.query(
+        `SELECT id, commission_id, reason, risk_score, risk_factors, status,
+                assigned_to, reviewed_at, review_notes, created_at
+         FROM audit_queue_items ${where}
+         ORDER BY risk_score DESC LIMIT $1 OFFSET $2`,
+        values,
+      );
+      return rows.map(toAuditRow);
+    },
+
+    async setAuditQueueStatus(commissionId, status, opts) {
+      await db.query(
+        `UPDATE audit_queue_items
+         SET status = $2, reviewed_at = COALESCE($3, reviewed_at), review_notes = COALESCE($4, review_notes)
+         WHERE commission_id = $1`,
+        [commissionId, status, opts?.reviewedAt ?? null, opts?.reviewNotes ?? null],
+      );
     },
   };
 }

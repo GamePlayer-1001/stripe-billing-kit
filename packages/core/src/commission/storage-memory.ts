@@ -3,10 +3,12 @@
  * 生产环境请实现 CommissionStorage 接口对接 Prisma / pg。
  */
 import type {
+  AuditQueueItemRow,
   CommissionRow,
   CommissionRuleRow,
   CommissionStatus,
   CommissionStorage,
+  QueueStatus,
   ReferralCodeRow,
   ReferralRelationshipRow,
   RelationshipStatus,
@@ -19,6 +21,7 @@ export class InMemoryCommissionStorage implements CommissionStorage {
   private rules: CommissionRuleRow[] = [];
   private commissions = new Map<string, CommissionRow>(); // id -> row
   private commissionKeys = new Set<string>(); // 幂等键 orderId|referrer|tier
+  private auditQueue = new Map<string, AuditQueueItemRow>(); // commissionId -> item
 
   // ── 邀请码 ──
   async getReferralCodeByCode(code: string): Promise<ReferralCodeRow | null> {
@@ -132,11 +135,45 @@ export class InMemoryCommissionStorage implements CommissionStorage {
     return true;
   }
 
+  // ── 审核队列 ──
+  async insertAuditQueueItem(row: AuditQueueItemRow): Promise<boolean> {
+    if (this.auditQueue.has(row.commissionId)) return false; // commissionId 唯一：重复入队跳过
+    this.auditQueue.set(row.commissionId, { ...row });
+    return true;
+  }
+  async listAuditQueue(opts?: {
+    status?: QueueStatus;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditQueueItemRow[]> {
+    const limit = opts?.limit ?? 20;
+    const offset = opts?.offset ?? 0;
+    return [...this.auditQueue.values()]
+      .filter((i) => !opts?.status || i.status === opts.status)
+      .sort((a, b) => b.riskScore - a.riskScore)
+      .slice(offset, offset + limit)
+      .map((i) => ({ ...i }));
+  }
+  async setAuditQueueStatus(
+    commissionId: string,
+    status: QueueStatus,
+    opts?: { reviewedAt?: Date; reviewNotes?: string },
+  ): Promise<void> {
+    const item = this.auditQueue.get(commissionId);
+    if (!item) return;
+    item.status = status;
+    if (opts?.reviewedAt) item.reviewedAt = opts.reviewedAt;
+    if (opts?.reviewNotes != null) item.reviewNotes = opts.reviewNotes;
+  }
+
   // ── 测试辅助 ──
   getCommission(id: string): CommissionRow | undefined {
     return this.commissions.get(id);
   }
   allCommissions(): CommissionRow[] {
     return [...this.commissions.values()];
+  }
+  getAuditItem(commissionId: string): AuditQueueItemRow | undefined {
+    return this.auditQueue.get(commissionId);
   }
 }

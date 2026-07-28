@@ -9,6 +9,7 @@ export interface PrismaCommissionLike {
   referralRelationship: any;
   commissionRule: any;
   commission: any;
+  auditQueueItem: any;
 }
 
 export function prismaCommissionStorage(prisma: PrismaCommissionLike): CommissionStorage {
@@ -143,6 +144,52 @@ export function prismaCommissionStorage(prisma: PrismaCommissionLike): Commissio
         data: { status: to },
       });
       return result.count > 0;
+    },
+
+    async insertAuditQueueItem(row) {
+      try {
+        await prisma.auditQueueItem.create({
+          data: {
+            id: row.id,
+            commissionId: row.commissionId,
+            reason: row.reason,
+            riskScore: row.riskScore,
+            riskFactors: row.riskFactors as unknown as object,
+            status: row.status,
+            assignedTo: row.assignedTo,
+            reviewedAt: row.reviewedAt,
+            reviewNotes: row.reviewNotes,
+            createdAt: row.createdAt,
+          },
+        });
+        return true;
+      } catch (err: any) {
+        // P2002 = commissionId 唯一约束冲突 → 已入队,幂等跳过
+        if (err?.code === 'P2002') return false;
+        throw err;
+      }
+    },
+
+    async listAuditQueue(opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+      const offset = Math.max(opts?.offset ?? 0, 0);
+      return prisma.auditQueueItem.findMany({
+        where: opts?.status ? { status: opts.status } : undefined,
+        orderBy: { riskScore: 'desc' },
+        take: limit,
+        skip: offset,
+      });
+    },
+
+    async setAuditQueueStatus(commissionId, status, opts) {
+      await prisma.auditQueueItem.updateMany({
+        where: { commissionId },
+        data: {
+          status,
+          ...(opts?.reviewedAt ? { reviewedAt: opts.reviewedAt } : {}),
+          ...(opts?.reviewNotes != null ? { reviewNotes: opts.reviewNotes } : {}),
+        },
+      });
     },
   };
 }

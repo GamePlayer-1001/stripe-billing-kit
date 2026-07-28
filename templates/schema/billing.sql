@@ -101,3 +101,18 @@ CREATE TABLE IF NOT EXISTS commissions (
   CONSTRAINT uq_commission UNIQUE (order_id, referrer_user_id, tier_level)
 );
 CREATE INDEX IF NOT EXISTS idx_commissions_referrer ON commissions(referrer_user_id, status);
+
+-- 人工审核队列(7.1 Level 2):commission_id 唯一,重复入队由 ON CONFLICT 拦截
+CREATE TABLE IF NOT EXISTS audit_queue_items (
+  id            TEXT PRIMARY KEY,
+  commission_id TEXT NOT NULL UNIQUE,
+  reason        TEXT NOT NULL,                     -- HIGH_AMOUNT / RAPID_GROWTH / SAME_DEVICE / ...
+  risk_score    INTEGER NOT NULL DEFAULT 0,        -- 0-100
+  risk_factors  JSONB,                             -- ["high_amount", "temp_email"]
+  status        TEXT NOT NULL DEFAULT 'PENDING',   -- PENDING / IN_PROGRESS / APPROVED / REJECTED / ESCALATED
+  assigned_to   TEXT,
+  reviewed_at   TIMESTAMPTZ,
+  review_notes  TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_queue_status ON audit_queue_items(status, risk_score DESC);

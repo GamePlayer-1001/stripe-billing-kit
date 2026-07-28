@@ -39,6 +39,9 @@ export type {
   TierCommissionResult,
   CommissionCalculationResult,
   ClawbackResult,
+  ReviewTrigger,
+  QueueStatus,
+  AuditQueueItemRow,
 } from './types.js';
 
 // 存储
@@ -77,3 +80,11 @@ export {
 
 // REST 端点路由（主管线自动挂载；自定义适配器也可直接调用）
 export { handleCommissionRequest } from './http.js';
+
+// 风控审核（Level 1 自动化规则纯函数）
+export {
+  evaluateAutoReview,
+  type AutoReviewRules,
+  type AutoReviewInput,
+  type AutoReviewResult,
+} from './audit.js';

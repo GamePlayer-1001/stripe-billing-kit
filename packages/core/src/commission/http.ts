@@ -94,6 +94,20 @@ export async function handleCommissionRequest(
     return json(200, { items: rows, limit, offset });
   }
 
+  // ── GET admin/audit-queue：人工审核队列（管理员；riskScore 倒序） ──
+  if (route === 'GET admin/audit-queue') {
+    if (!req.isAdmin) return forbidden();
+    const { limit, offset } = parsePagination(req.query);
+    const rawStatus = req.query?.['status'];
+    const status =
+      rawStatus === 'PENDING' || rawStatus === 'IN_PROGRESS' || rawStatus === 'APPROVED' ||
+      rawStatus === 'REJECTED' || rawStatus === 'ESCALATED'
+        ? rawStatus
+        : undefined;
+    const items = await engine.storage.listAuditQueue({ status, limit, offset });
+    return json(200, { items, limit, offset });
+  }
+
   // ── POST admin/commissions/:id/review：审批/拒绝佣金（管理员；拒绝必填原因） ──
   const mReview = method === 'POST' ? path.match(/^admin\/commissions\/([^/]+)\/review$/) : null;
   if (mReview) {

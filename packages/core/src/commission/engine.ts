@@ -231,6 +231,7 @@ export class CommissionEngine {
   async approveCommission(commissionId: string): Promise<boolean> {
     const ok = await this.config.storage.transitionCommissionStatus(commissionId, ['PENDING'], 'APPROVED');
     if (ok) {
+      await this.config.storage.setAuditQueueStatus(commissionId, 'APPROVED', { reviewedAt: new Date() });
       this.logger?.info('commission.review.approved', { commissionId });
     } else {
       this.logger?.warn('commission.review.approve_rejected_by_state', { commissionId });
@@ -244,6 +245,10 @@ export class CommissionEngine {
   async rejectCommission(commissionId: string, reason?: string): Promise<boolean> {
     const ok = await this.config.storage.transitionCommissionStatus(commissionId, ['PENDING'], 'REJECTED');
     if (ok) {
+      await this.config.storage.setAuditQueueStatus(commissionId, 'REJECTED', {
+        reviewedAt: new Date(),
+        reviewNotes: reason,
+      });
       this.logger?.info('commission.review.rejected', { commissionId, reason });
     } else {
       this.logger?.warn('commission.review.reject_rejected_by_state', { commissionId });
@@ -379,6 +384,29 @@ export class CommissionEngine {
         createdAt: now,
       };
       const inserted = await storage.insertCommission(row);
+
+      // 7. 需人工审核的佣金自动入队（7.1 Level 2；insert 幂等，重放不双入队）
+      if (inserted && reviewStatus === 'MANUAL_REVIEW') {
+        const threshold = rule.requireReviewOverCents ?? 0;
+        // 超阈值倍数越高风险越大：基础 50 分 + 每超 1 倍加 10 分，封顶 100
+        const riskScore = Math.min(
+          100,
+          50 + (threshold > 0 ? Math.floor((amount / threshold - 1) * 10) : 0),
+        );
+        await storage.insertAuditQueueItem({
+          id: randomUUID(),
+          commissionId,
+          reason: 'HIGH_AMOUNT',
+          riskScore,
+          riskFactors: ['high_amount'],
+          status: 'PENDING',
+          assignedTo: null,
+          reviewedAt: null,
+          reviewNotes: null,
+          createdAt: now,
+        });
+        this.logger?.info('commission.audit.enqueued', { commissionId, riskScore });
+      }
 
       tiers.push({
         tierLevel: node.tierLevel,

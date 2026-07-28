@@ -116,3 +116,20 @@ CREATE TABLE IF NOT EXISTS commissions (
   UNIQUE KEY uq_commission (order_id, referrer_user_id, tier_level),
   KEY idx_commissions_referrer (referrer_user_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 人工审核队列（7.1 Level 2）：commission_id 唯一，重复入队由唯一约束拦截
+CREATE TABLE IF NOT EXISTS audit_queue_items (
+  id            VARCHAR(64)  NOT NULL,
+  commission_id VARCHAR(64)  NOT NULL,
+  reason        VARCHAR(30)  NOT NULL COMMENT 'HIGH_AMOUNT / RAPID_GROWTH / SAME_DEVICE / ...',
+  risk_score    INT          NOT NULL DEFAULT 0 COMMENT '0-100',
+  risk_factors  JSON         NULL COMMENT '["high_amount", "temp_email"]',
+  status        VARCHAR(20)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING / IN_PROGRESS / APPROVED / REJECTED / ESCALATED',
+  assigned_to   VARCHAR(255) NULL,
+  reviewed_at   DATETIME(3)  NULL,
+  review_notes  TEXT         NULL,
+  created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_audit_commission (commission_id),
+  KEY idx_audit_queue_status (status, risk_score)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

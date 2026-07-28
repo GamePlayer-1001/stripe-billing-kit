@@ -132,6 +132,7 @@ export {
   processChargeRefunded,
   resolveTriggerScope,
   handleCommissionRequest,
+  evaluateAutoReview,
 } from './commission/index.js';
 export type {
   RewardComponent,
@@ -167,4 +168,10 @@ export type {
   BuildChainResult,
   PrismaCommissionLike,
   ClawbackResult,
+  ReviewTrigger,
+  QueueStatus,
+  AuditQueueItemRow,
+  AutoReviewRules,
+  AutoReviewInput,
+  AutoReviewResult,
 } from './commission/index.js';

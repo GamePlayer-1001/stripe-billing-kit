@@ -207,6 +207,53 @@ export interface CommissionStorage {
     from: CommissionStatus[],
     to: CommissionStatus,
   ): Promise<boolean>;
+
+  // 审核队列（7.1 Level 2 人工审核）
+  /** 幂等插入审核队列（commissionId 唯一，重复入队返回 false） */
+  insertAuditQueueItem(row: AuditQueueItemRow): Promise<boolean>;
+  /** 审核队列分页查询（riskScore 倒序），status 缺省查全部 */
+  listAuditQueue(opts?: {
+    status?: QueueStatus;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditQueueItemRow[]>;
+  /** 按 commissionId 更新队列项状态（审批/拒绝时联动） */
+  setAuditQueueStatus(
+    commissionId: string,
+    status: QueueStatus,
+    opts?: { reviewedAt?: Date; reviewNotes?: string },
+  ): Promise<void>;
+}
+
+// ──────────────────────────────────────────────────────
+// 审核队列（7.1 三层审核机制）
+// ──────────────────────────────────────────────────────
+
+/** 入队原因（为什么需要人工审核） */
+export type ReviewTrigger =
+  | 'HIGH_AMOUNT' // 超过阈值
+  | 'RAPID_GROWTH' // 快速增长异常
+  | 'SAME_DEVICE' // 同设备检测
+  | 'SUSPICIOUS_PATTERN' // 异常行为模式
+  | 'MANUAL_FLAG' // 人工标记
+  | 'PERIODIC_AUDIT'; // 周期性审查
+
+export type QueueStatus = 'PENDING' | 'IN_PROGRESS' | 'APPROVED' | 'REJECTED' | 'ESCALATED';
+
+export interface AuditQueueItemRow {
+  id: string;
+  /** 关联佣金（唯一：一笔佣金最多一个队列项） */
+  commissionId: string;
+  reason: ReviewTrigger;
+  /** 风险评分 0-100 */
+  riskScore: number;
+  /** 风险因子标签，如 ["high_amount", "temp_email"] */
+  riskFactors: string[];
+  status: QueueStatus;
+  assignedTo: string | null;
+  reviewedAt: Date | null;
+  reviewNotes: string | null;
+  createdAt: Date;
 }
 
 // ──────────────────────────────────────────────────────
