@@ -11,6 +11,7 @@ import type { BillingLogger } from '../config.js';
 import { buildReferralChain } from './chain.js';
 import type {
   CalculateCommissionInput,
+  ClawbackResult,
   CommissionCalculationResult,
   CommissionConfig,
   CommissionRuleRow,
@@ -192,6 +193,31 @@ export class CommissionEngine {
   constructor(opts: CommissionEngineOptions) {
     this.config = opts.config;
     this.logger = opts.logger;
+  }
+
+  /**
+   * 退款追回（5.3 charge.refunded → clawback）：
+   * - PENDING/APPROVED → REFUNDED（存储层带前置状态条件，天然幂等：重放时回转 0 条）
+   * - PAID 不自动回转，返回 ID 列表交人工追回（打款腿落地后接入负余额抵扣）
+   */
+  async clawbackByOrder(orderId: string): Promise<ClawbackResult> {
+    const storage = this.config.storage;
+    const existing = await storage.listCommissionsByOrder(orderId);
+    if (!existing.length) {
+      return { orderId, refundedCount: 0, paidRequiresManual: [] };
+    }
+
+    const refundedCount = await storage.markCommissionsRefunded(orderId);
+    const paidRequiresManual = existing.filter((c) => c.status === 'PAID').map((c) => c.id);
+
+    this.logger?.info('commission.clawback.executed', { orderId, refundedCount });
+    if (paidRequiresManual.length) {
+      this.logger?.warn('commission.clawback.paid_requires_manual', {
+        orderId,
+        commissionIds: paidRequiresManual,
+      });
+    }
+    return { orderId, refundedCount, paidRequiresManual };
   }
 
   /**

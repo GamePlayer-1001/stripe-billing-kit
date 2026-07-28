@@ -155,15 +155,20 @@ export async function handleWebhookRequest(
     case 'product.updated':
       invalidateCatalogCache(ctx);
       break;
+    case 'charge.refunded':
+      // 主管线无动作；仅佣金模块 clawback 消费（未启用时等同忽略）
+      break;
     default:
       ctx.logger.info('billing.webhook.ignored', { type: event.type });
       return { received: true, ignored: true };
   }
 
-  // 佣金模块（可选）：结账/账单事件触发计佣。失败不影响主流程（引擎层另有幂等保护）
+  // 佣金模块（可选）：结账/账单/退款事件触发计佣或追回。失败不影响主流程（引擎层另有幂等保护）
   if (
     ctx.config.commission?.engine &&
-    (event.type === 'checkout.session.completed' || event.type === 'invoice.paid')
+    (event.type === 'checkout.session.completed' ||
+      event.type === 'invoice.paid' ||
+      event.type === 'charge.refunded')
   ) {
     try {
       await handleCommissionEvent(ctx, ctx.config.commission.engine, event);

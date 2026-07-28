@@ -12,10 +12,11 @@ import type Stripe from 'stripe';
 import type { BillingContext, PlanType } from '../config.js';
 import { resolveUserByCustomerId } from '../customers.js';
 import type { CommissionEngine } from './engine.js';
-import type { CommissionCalculationResult, TriggerScope } from './types.js';
+import type { ClawbackResult, CommissionCalculationResult, TriggerScope } from './types.js';
 
 type CheckoutSession = Stripe.CheckoutSessionCompletedEvent['data']['object'];
 type Invoice = Stripe.InvoicePaidEvent['data']['object'];
+type Charge = Stripe.ChargeRefundedEvent['data']['object'];
 
 /** 试用类 / 按量类在 checkout 阶段不产生付款，不计佣 */
 const NO_PAYMENT_AT_CHECKOUT: ReadonlySet<PlanType> = new Set([
@@ -159,6 +160,55 @@ export async function processInvoicePaid(
 }
 
 /**
+ * 处理 charge.refunded（5.3 clawback）。
+ * 边界原则：
+ * - 仅全额退款（charge.refunded === true）触发自动追回；部分退款只告警，交人工裁量
+ * - orderId 反查：invoice 账单直接取 charge.invoice；checkout 订单经 payment_intent 反查 session
+ */
+export async function processChargeRefunded(
+  ctx: BillingContext,
+  engine: CommissionEngine,
+  charge: Charge,
+): Promise<ClawbackResult | null> {
+  if (!charge.refunded) {
+    ctx.logger.warn('commission.clawback.partial_refund_skipped', {
+      chargeId: charge.id,
+      amountRefunded: charge.amount_refunded,
+    });
+    return null;
+  }
+
+  const orderId = await resolveOrderIdOfCharge(ctx, charge);
+  if (!orderId) {
+    ctx.logger.warn('commission.clawback.order_unresolved', { chargeId: charge.id });
+    return null;
+  }
+  return engine.clawbackByOrder(orderId);
+}
+
+/** charge → 佣金侧 orderId：invoice ID 或 checkout session ID */
+async function resolveOrderIdOfCharge(ctx: BillingContext, charge: Charge): Promise<string | null> {
+  // 订阅/账单场景：charge 直接挂 invoice（兼容旧版字段）
+  const invoiceRef = (charge as unknown as { invoice?: string | { id: string } | null }).invoice;
+  if (invoiceRef) return typeof invoiceRef === 'string' ? invoiceRef : invoiceRef.id;
+
+  // checkout 场景：经 payment_intent 反查 session
+  const pi = charge.payment_intent;
+  const paymentIntentId = typeof pi === 'string' ? pi : pi?.id ?? null;
+  if (!paymentIntentId) return null;
+  try {
+    const sessions = await ctx.stripe.checkout.sessions.list({ payment_intent: paymentIntentId, limit: 1 });
+    return sessions.data[0]?.id ?? null;
+  } catch (err) {
+    ctx.logger.warn('commission.clawback.session_lookup_failed', {
+      paymentIntentId,
+      err: String(err),
+    });
+    return null;
+  }
+}
+
+/**
  * 统一入口：在 core webhook 管线中按需调用（仅当启用佣金模块时）。
  * 返回 null 表示该事件与佣金无关或不计佣。
  */
@@ -166,12 +216,14 @@ export async function handleCommissionEvent(
   ctx: BillingContext,
   engine: CommissionEngine,
   event: Stripe.Event,
-): Promise<CommissionCalculationResult | null> {
+): Promise<CommissionCalculationResult | ClawbackResult | null> {
   switch (event.type) {
     case 'checkout.session.completed':
       return processCheckoutCompleted(ctx, engine, event.data.object);
     case 'invoice.paid':
       return processInvoicePaid(ctx, engine, event.data.object);
+    case 'charge.refunded':
+      return processChargeRefunded(ctx, engine, event.data.object);
     default:
       return null;
   }

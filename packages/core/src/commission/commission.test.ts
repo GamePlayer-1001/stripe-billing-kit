@@ -467,3 +467,58 @@ describe('resolveTriggerScope', () => {
     expect(resolveTriggerScope('subscription', 'invoice', 'subscription_create')).toBeNull();
   });
 });
+
+// ── 退款追回（clawback）──
+
+describe('clawback', () => {
+  async function setupWithCommission(orderId: string) {
+    const storage = new InMemoryCommissionStorage();
+    const svc = new ReferralService({ storage });
+    await linkActive(storage, svc, 'referrer', 'buyer');
+    makeRule(storage, { commissionBase: 'GROSS_BASED', components: [percent(0.2)] });
+    const engine = new CommissionEngine({ config: makeConfig(storage) });
+    await engine.calculateCommissions({
+      userId: 'buyer',
+      orderId,
+      planKey: 'pro',
+      planType: 'one_time',
+      triggerScope: 'FIRST_PAYMENT',
+      amountTotal: 10000,
+      currency: 'USD',
+    });
+    return { storage, engine };
+  }
+
+  it('PENDING/APPROVED 佣金回转为 REFUNDED', async () => {
+    const { storage, engine } = await setupWithCommission('order_cb');
+    const result = await engine.clawbackByOrder('order_cb');
+    expect(result.refundedCount).toBe(1);
+    expect(result.paidRequiresManual).toEqual([]);
+    expect(storage.allCommissions()[0]?.status).toBe('REFUNDED');
+  });
+
+  it('幂等：重复 clawback 回转 0 条', async () => {
+    const { engine } = await setupWithCommission('order_cb2');
+    await engine.clawbackByOrder('order_cb2');
+    const second = await engine.clawbackByOrder('order_cb2');
+    expect(second.refundedCount).toBe(0);
+  });
+
+  it('PAID 佣金不自动回转，列入人工追回清单', async () => {
+    const { storage, engine } = await setupWithCommission('order_cb3');
+    const row = storage.allCommissions()[0]!;
+    storage.getCommission(row.id)!.status = 'PAID'; // 模拟已打款
+    const result = await engine.clawbackByOrder('order_cb3');
+    expect(result.refundedCount).toBe(0);
+    expect(result.paidRequiresManual).toEqual([row.id]);
+    expect(storage.getCommission(row.id)?.status).toBe('PAID'); // Layer 3：状态不被覆盖
+  });
+
+  it('无佣金记录的订单：安静返回 0', async () => {
+    const storage = new InMemoryCommissionStorage();
+    const engine = new CommissionEngine({ config: makeConfig(storage) });
+    const result = await engine.clawbackByOrder('order_none');
+    expect(result.refundedCount).toBe(0);
+    expect(result.paidRequiresManual).toEqual([]);
+  });
+});

@@ -186,6 +186,13 @@ export interface CommissionStorage {
   insertCommission(row: CommissionRow): Promise<boolean>;
   /** 推荐人本月转化数（REFERRER_MONTHLY_CONVERSIONS 驱动变量用） */
   countMonthlyConversions(referrerUserId: string, monthStart: Date): Promise<number>;
+  /** 按订单查全部佣金记录（clawback 时区分可回转/已打款） */
+  listCommissionsByOrder(orderId: string): Promise<CommissionRow[]>;
+  /**
+   * 退款追回：把该订单下 PENDING/APPROVED 的佣金回转为 REFUNDED，返回回转条数。
+   * Layer 3 单向流转：必须带前置状态条件（WHERE status IN …），PAID 记录不得自动回转。
+   */
+  markCommissionsRefunded(orderId: string): Promise<number>;
 }
 
 // ──────────────────────────────────────────────────────
@@ -272,4 +279,13 @@ export interface CommissionCalculationResult {
     totalCommission: number;
     platformRevenue: number;
   } | null;
+}
+
+/** 退款追回结果（5.3 charge.refunded → clawback） */
+export interface ClawbackResult {
+  orderId: string;
+  /** 自动回转为 REFUNDED 的佣金条数（原状态 PENDING/APPROVED） */
+  refundedCount: number;
+  /** 已打款（PAID）无法自动回转、需人工追回的佣金 ID */
+  paidRequiresManual: string[];
 }

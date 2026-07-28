@@ -94,6 +94,20 @@ export class InMemoryCommissionStorage implements CommissionStorage {
     }
     return count;
   }
+  async listCommissionsByOrder(orderId: string): Promise<CommissionRow[]> {
+    return [...this.commissions.values()].filter((c) => c.orderId === orderId).map((c) => ({ ...c }));
+  }
+  async markCommissionsRefunded(orderId: string): Promise<number> {
+    let count = 0;
+    for (const c of this.commissions.values()) {
+      // Layer 3 单向流转：只回转 PENDING/APPROVED，PAID 需人工追回
+      if (c.orderId === orderId && (c.status === 'PENDING' || c.status === 'APPROVED')) {
+        c.status = 'REFUNDED';
+        count += 1;
+      }
+    }
+    return count;
+  }
 
   // ── 测试辅助 ──
   getCommission(id: string): CommissionRow | undefined {

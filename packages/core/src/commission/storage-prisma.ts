@@ -111,5 +111,18 @@ export function prismaCommissionStorage(prisma: PrismaCommissionLike): Commissio
         where: { referrerUserId, createdAt: { gte: monthStart } },
       });
     },
+
+    async listCommissionsByOrder(orderId) {
+      return prisma.commission.findMany({ where: { orderId } });
+    },
+
+    async markCommissionsRefunded(orderId) {
+      // Layer 3 单向流转:带前置状态条件的条件更新,PAID 记录不受影响(需人工追回)
+      const result = await prisma.commission.updateMany({
+        where: { orderId, status: { in: ['PENDING', 'APPROVED'] } },
+        data: { status: 'REFUNDED' },
+      });
+      return result.count;
+    },
   };
 }

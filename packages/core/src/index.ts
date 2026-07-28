@@ -129,6 +129,7 @@ export {
   handleCommissionEvent,
   processCheckoutCompleted,
   processInvoicePaid,
+  processChargeRefunded,
   resolveTriggerScope,
 } from './commission/index.js';
 export type {
@@ -164,4 +165,5 @@ export type {
   ChainNode,
   BuildChainResult,
   PrismaCommissionLike,
+  ClawbackResult,
 } from './commission/index.js';

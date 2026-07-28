@@ -1,5 +1,6 @@
 import type { PgLike } from '../storage/pg.js';
 import type {
+  CommissionRow,
   CommissionRuleRow,
   CommissionStorage,
   ReferralCodeRow,
@@ -29,6 +30,24 @@ function toRelationshipRow(r: any): ReferralRelationshipRow {
     createdAt: new Date(r.created_at),
     activatedAt: r.activated_at ? new Date(r.activated_at) : null,
     metadata: r.metadata ?? undefined,
+  };
+}
+
+function toCommissionRow(r: any): CommissionRow {
+  return {
+    id: r.id,
+    referrerUserId: r.referrer_user_id,
+    orderId: r.order_id,
+    planKey: r.plan_key,
+    amount: r.amount,
+    currency: r.currency,
+    rateBreakdown: r.rate_breakdown ?? [],
+    grantStatus: r.grant_status,
+    tierLevel: r.tier_level,
+    status: r.status,
+    reviewStatus: r.review_status,
+    validUntil: new Date(r.valid_until),
+    createdAt: new Date(r.created_at),
   };
 }
 
@@ -180,6 +199,26 @@ export function pgCommissionStorage(db: PgLike): CommissionStorage {
         [referrerUserId, monthStart],
       );
       return rows[0]?.count ?? 0;
+    },
+
+    async listCommissionsByOrder(orderId) {
+      const { rows } = await db.query(
+        `SELECT id, referrer_user_id, order_id, plan_key, amount, currency, rate_breakdown,
+                grant_status, tier_level, status, review_status, valid_until, created_at
+         FROM commissions WHERE order_id = $1`,
+        [orderId],
+      );
+      return rows.map(toCommissionRow);
+    },
+
+    async markCommissionsRefunded(orderId) {
+      // Layer 3 单向流转:带前置状态条件的条件更新,PAID 记录不受影响(需人工追回)
+      const { rowCount } = await db.query(
+        `UPDATE commissions SET status = 'REFUNDED'
+         WHERE order_id = $1 AND status IN ('PENDING', 'APPROVED')`,
+        [orderId],
+      );
+      return rowCount ?? 0;
     },
   };
 }

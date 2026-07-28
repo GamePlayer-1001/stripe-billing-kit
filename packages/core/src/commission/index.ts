@@ -38,6 +38,7 @@ export type {
   CalculateCommissionInput,
   TierCommissionResult,
   CommissionCalculationResult,
+  ClawbackResult,
 } from './types.js';
 
 // 存储
@@ -70,5 +71,6 @@ export {
   handleCommissionEvent,
   processCheckoutCompleted,
   processInvoicePaid,
+  processChargeRefunded,
   resolveTriggerScope,
 } from './events.js';
