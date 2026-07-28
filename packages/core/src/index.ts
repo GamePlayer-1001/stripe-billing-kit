@@ -143,6 +143,7 @@ export {
   StripeConnectProvider,
   PayPalProvider,
   mapPayPalStatus,
+  runScheduledPayouts,
   enqueueCommissionJob,
   processCommissionJobs,
 } from './commission/index.js';
@@ -198,6 +199,10 @@ export type {
   FraudReport,
   StripeConnectProviderOptions,
   PayPalProviderOptions,
+  ScheduledPayoutOptions,
+  ScheduledPayoutResult,
+  ScheduledPayoutSkip,
+  ScheduledSkipReason,
   ReferralEventBus,
   ReferralStreamEvent,
   ReferralEventListener,

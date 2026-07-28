@@ -143,6 +143,15 @@ export {
 } from './provider-stripe-connect.js';
 export { PayPalProvider, mapPayPalStatus, type PayPalProviderOptions } from './provider-paypal.js';
 
+// 打款调度器（Phase 3：提现门槛/冻结期/批量结算，产品侧 cron 周期调用）
+export {
+  runScheduledPayouts,
+  type ScheduledPayoutOptions,
+  type ScheduledPayoutResult,
+  type ScheduledPayoutSkip,
+  type ScheduledSkipReason,
+} from './payout-scheduler.js';
+
 // Outbox 异步任务（5.4.2 webhook 快速响应）
 export {
   enqueueCommissionJob,
