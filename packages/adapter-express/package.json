@@ -1,6 +1,6 @@
 {
   "name": "@billing-kit/express",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Express adapter for @billing-kit/core.",
   "license": "MIT",
   "repository": {
@@ -11,7 +11,11 @@
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["stripe", "billing", "express"],
+  "keywords": [
+    "stripe",
+    "billing",
+    "express"
+  ],
   "type": "module",
   "engines": {
     "node": ">=20.19"

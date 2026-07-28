@@ -1,6 +1,6 @@
 {
   "name": "@billing-kit/vue",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Vue 3 composables for stripe-billing-kit HTTP contract.",
   "license": "MIT",
   "repository": {
@@ -11,7 +11,12 @@
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["stripe", "billing", "vue", "composables"],
+  "keywords": [
+    "stripe",
+    "billing",
+    "vue",
+    "composables"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -19,7 +24,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"

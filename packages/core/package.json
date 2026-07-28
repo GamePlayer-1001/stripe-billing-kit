@@ -1,6 +1,6 @@
 {
   "name": "@billing-kit/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Framework-agnostic Stripe billing core: dynamic catalog, checkout, webhooks, entitlements, sync.",
   "license": "MIT",
   "repository": {
@@ -11,7 +11,14 @@
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["stripe", "billing", "subscription", "checkout", "webhook", "entitlements"],
+  "keywords": [
+    "stripe",
+    "billing",
+    "subscription",
+    "checkout",
+    "webhook",
+    "entitlements"
+  ],
   "type": "module",
   "engines": {
     "node": ">=20.19"

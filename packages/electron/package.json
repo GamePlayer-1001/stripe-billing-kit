@@ -1,6 +1,6 @@
 {
   "name": "@billing-kit/electron",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Electron main/preload/renderer billing bridge for stripe-billing-kit.",
   "license": "MIT",
   "repository": {
@@ -11,7 +11,11 @@
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["stripe", "billing", "electron"],
+  "keywords": [
+    "stripe",
+    "billing",
+    "electron"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -19,7 +23,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"
