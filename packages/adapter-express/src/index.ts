@@ -5,6 +5,8 @@ import { handleBillingRequest } from '@billing-kit/core';
 export interface ExpressAdapterOptions {
   /** 从请求解析当前登录用户,未登录返回 null。产品側自己实现 */
   resolveUser: (req: Request) => Promise<string | null> | string | null;
+  /** 是否管理员(佣金审核等 /admin/* 端点用),缺省一律视为 false */
+  resolveAdmin?: (req: Request) => Promise<boolean> | boolean;
 }
 
 /**
@@ -32,16 +34,21 @@ export function createExpressBillingRouter(config: BillingConfig, options: Expre
     res.status(result.status).json(result.body);
   });
 
-  // 其余端点:正常 JSON
+  // 其余端点:正常 JSON。正则通配以支持多段路径(如 referrals/:userId/commissions)
   router.use(json());
-  router.all('/:action', async (req: Request, res: Response) => {
-    const action = req.params['action'];
+  router.all(/.*/, async (req: Request, res: Response) => {
+    const query: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(req.query)) {
+      if (typeof v === 'string') query[k] = v;
+    }
     const billingReq: BillingHttpRequest = {
       method: req.method,
-      path: typeof action === 'string' ? action : (action?.[0] ?? ''),
+      path: req.path.replace(/^\/+/, ''),
       headers: {},
       jsonBody: req.body,
+      query,
       userId: await options.resolveUser(req),
+      isAdmin: (await options.resolveAdmin?.(req)) ?? false,
     };
     const result = await handleBillingRequest(config, billingReq);
     res.status(result.status).json(result.body);

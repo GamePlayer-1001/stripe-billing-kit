@@ -188,6 +188,11 @@ export interface CommissionStorage {
   countMonthlyConversions(referrerUserId: string, monthStart: Date): Promise<number>;
   /** 按订单查全部佣金记录（clawback 时区分可回转/已打款） */
   listCommissionsByOrder(orderId: string): Promise<CommissionRow[]>;
+  /** 按推荐人分页查佣金明细（createdAt 倒序），供 REST 端点 GET /referrals/:userId/commissions */
+  listCommissionsByReferrer(
+    referrerUserId: string,
+    opts?: { limit?: number; offset?: number },
+  ): Promise<CommissionRow[]>;
   /**
    * 退款追回：把该订单下 PENDING/APPROVED 的佣金回转为 REFUNDED，返回回转条数。
    * Layer 3 单向流转：必须带前置状态条件（WHERE status IN …），PAID 记录不得自动回转。

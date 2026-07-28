@@ -98,6 +98,18 @@ export class InMemoryCommissionStorage implements CommissionStorage {
   async listCommissionsByOrder(orderId: string): Promise<CommissionRow[]> {
     return [...this.commissions.values()].filter((c) => c.orderId === orderId).map((c) => ({ ...c }));
   }
+  async listCommissionsByReferrer(
+    referrerUserId: string,
+    opts?: { limit?: number; offset?: number },
+  ): Promise<CommissionRow[]> {
+    const limit = opts?.limit ?? 20;
+    const offset = opts?.offset ?? 0;
+    return [...this.commissions.values()]
+      .filter((c) => c.referrerUserId === referrerUserId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(offset, offset + limit)
+      .map((c) => ({ ...c }));
+  }
   async markCommissionsRefunded(orderId: string): Promise<number> {
     let count = 0;
     for (const c of this.commissions.values()) {

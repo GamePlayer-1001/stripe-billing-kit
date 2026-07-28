@@ -4,6 +4,8 @@ import { handleBillingRequest } from '@billing-kit/core';
 export interface NextAdapterOptions {
   /** 从请求解析当前登录用户,未登录返回 null。产品側自己实现(session/JWT 均可) */
   resolveUser: (req: Request) => Promise<string | null> | string | null;
+  /** 是否管理员(佣金审核等 /admin/* 端点用),缺省一律视为 false */
+  resolveAdmin?: (req: Request) => Promise<boolean> | boolean;
   /** 路由挂载前缀,默认 /api/billing(用于从 URL 提取子路径) */
   basePath?: string;
 }
@@ -29,6 +31,11 @@ export function createNextBillingHandler(
 
     const isWebhook = subPath === 'webhook';
 
+    const query: Record<string, string | undefined> = {};
+    url.searchParams.forEach((v, k) => {
+      query[k] = v;
+    });
+
     const billingReq: BillingHttpRequest = {
       method: req.method,
       path: subPath,
@@ -38,7 +45,9 @@ export function createNextBillingHandler(
       // webhook 必须 raw text 验签;其余端点解析 JSON(GET/空 body 容错)
       rawBody: isWebhook ? await req.text() : undefined,
       jsonBody: !isWebhook && req.method === 'POST' ? await req.json().catch(() => ({})) : undefined,
+      query,
       userId: isWebhook ? null : await options.resolveUser(req),
+      isAdmin: isWebhook ? false : (await options.resolveAdmin?.(req)) ?? false,
     };
 
     const res = await handleBillingRequest(config, billingReq);

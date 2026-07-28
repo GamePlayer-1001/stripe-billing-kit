@@ -116,6 +116,17 @@ export function prismaCommissionStorage(prisma: PrismaCommissionLike): Commissio
       return prisma.commission.findMany({ where: { orderId } });
     },
 
+    async listCommissionsByReferrer(referrerUserId, opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+      const offset = Math.max(opts?.offset ?? 0, 0);
+      return prisma.commission.findMany({
+        where: { referrerUserId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      });
+    },
+
     async markCommissionsRefunded(orderId) {
       // Layer 3 单向流转:带前置状态条件的条件更新,PAID 记录不受影响(需人工追回)
       const result = await prisma.commission.updateMany({

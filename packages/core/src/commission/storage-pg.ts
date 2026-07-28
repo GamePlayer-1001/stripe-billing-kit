@@ -211,6 +211,19 @@ export function pgCommissionStorage(db: PgLike): CommissionStorage {
       return rows.map(toCommissionRow);
     },
 
+    async listCommissionsByReferrer(referrerUserId, opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+      const offset = Math.max(opts?.offset ?? 0, 0);
+      const { rows } = await db.query(
+        `SELECT id, referrer_user_id, order_id, plan_key, amount, currency, rate_breakdown,
+                grant_status, tier_level, status, review_status, valid_until, created_at
+         FROM commissions WHERE referrer_user_id = $1
+         ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+        [referrerUserId, limit, offset],
+      );
+      return rows.map(toCommissionRow);
+    },
+
     async markCommissionsRefunded(orderId) {
       // Layer 3 单向流转:带前置状态条件的条件更新,PAID 记录不受影响(需人工追回)
       const { rowCount } = await db.query(

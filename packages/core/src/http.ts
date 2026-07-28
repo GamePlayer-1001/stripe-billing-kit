@@ -5,6 +5,7 @@ import { createCheckoutSession } from './checkout.js';
 import { createPortalSession } from './portal.js';
 import { getEntitlements } from './entitlements.js';
 import { handleWebhookRequest } from './webhook.js';
+import { handleCommissionRequest } from './commission/http.js';
 import { isBillingError } from './errors.js';
 
 /**
@@ -19,8 +20,12 @@ export interface BillingHttpRequest {
   /** webhook 需要 raw body;其余端点为已解析 JSON 或 undefined */
   rawBody?: string | Buffer;
   jsonBody?: unknown;
+  /** URL 查询参数（分页等）,由适配器解析注入 */
+  query?: Record<string, string | undefined>;
   /** 由适配器注入的当前登录用户;未登录为 null */
   userId: string | null;
+  /** 是否管理员(佣金审核等管理端点用),由适配器注入;缺省视为 false */
+  isAdmin?: boolean;
 }
 
 export interface BillingHttpResponse {
@@ -78,8 +83,12 @@ export async function handleBillingRequest(
         return json(200, result);
       }
 
-      default:
+      default: {
+        // 佣金/邀请返利端点（可选模块,多段路径带参数,switch 无法枚举）
+        const commissionRes = await handleCommissionRequest(ctx, req);
+        if (commissionRes) return commissionRes;
         return json(404, { error: 'not_found', message: `未知端点:${route}` });
+      }
     }
   } catch (err) {
     if (isBillingError(err)) {

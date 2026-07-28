@@ -74,3 +74,6 @@ export {
   processChargeRefunded,
   resolveTriggerScope,
 } from './events.js';
+
+// REST 端点路由（主管线自动挂载；自定义适配器也可直接调用）
+export { handleCommissionRequest } from './http.js';

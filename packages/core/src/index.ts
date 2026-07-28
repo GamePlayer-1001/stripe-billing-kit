@@ -131,6 +131,7 @@ export {
   processInvoicePaid,
   processChargeRefunded,
   resolveTriggerScope,
+  handleCommissionRequest,
 } from './commission/index.js';
 export type {
   RewardComponent,

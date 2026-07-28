@@ -195,6 +195,11 @@ export class CommissionEngine {
     this.logger = opts.logger;
   }
 
+  /** 暴露存储层（REST 端点层查询佣金明细用） */
+  get storage() {
+    return this.config.storage;
+  }
+
   /**
    * 退款追回（5.3 charge.refunded → clawback）：
    * - PENDING/APPROVED → REFUNDED（存储层带前置状态条件，天然幂等：重放时回转 0 条）
