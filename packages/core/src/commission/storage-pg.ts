@@ -220,5 +220,14 @@ export function pgCommissionStorage(db: PgLike): CommissionStorage {
       );
       return rowCount ?? 0;
     },
+
+    async transitionCommissionStatus(commissionId, from, to) {
+      // Layer 3 单向流转:WHERE status = ANY(前置状态) 的乐观并发控制
+      const { rowCount } = await db.query(
+        'UPDATE commissions SET status = $3 WHERE id = $1 AND status = ANY($2)',
+        [commissionId, from, to],
+      );
+      return (rowCount ?? 0) > 0;
+    },
   };
 }

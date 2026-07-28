@@ -193,6 +193,15 @@ export interface CommissionStorage {
    * Layer 3 单向流转：必须带前置状态条件（WHERE status IN …），PAID 记录不得自动回转。
    */
   markCommissionsRefunded(orderId: string): Promise<number>;
+  /**
+   * Layer 3 状态机单向流转：仅当当前状态在 from 集合内才更新为 to（乐观并发控制）。
+   * @returns 是否实际发生流转（false = 状态不符/重复操作，调用方不得视为成功）
+   */
+  transitionCommissionStatus(
+    commissionId: string,
+    from: CommissionStatus[],
+    to: CommissionStatus,
+  ): Promise<boolean>;
 }
 
 // ──────────────────────────────────────────────────────

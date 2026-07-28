@@ -124,5 +124,14 @@ export function prismaCommissionStorage(prisma: PrismaCommissionLike): Commissio
       });
       return result.count;
     },
+
+    async transitionCommissionStatus(commissionId, from, to) {
+      // Layer 3 单向流转:updateMany 带前置状态条件(乐观并发控制),count=0 表示状态不符
+      const result = await prisma.commission.updateMany({
+        where: { id: commissionId, status: { in: from } },
+        data: { status: to },
+      });
+      return result.count > 0;
+    },
   };
 }

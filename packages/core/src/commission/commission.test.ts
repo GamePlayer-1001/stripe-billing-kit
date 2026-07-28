@@ -522,3 +522,101 @@ describe('clawback', () => {
     expect(result.paidRequiresManual).toEqual([]);
   });
 });
+
+// ── Layer 3 状态机单向流转（5.4.1）──
+
+describe('transitionCommissionStatus', () => {
+  async function setupCommission(orderId: string, opts?: { requireReview?: boolean }) {
+    const storage = new InMemoryCommissionStorage();
+    const svc = new ReferralService({ storage });
+    await linkActive(storage, svc, 'referrer', 'buyer');
+    makeRule(storage, {
+      commissionBase: 'GROSS_BASED',
+      components: [percent(0.2)],
+      // requireReview 时门槛设为 0 → 任何金额都进人工审核（PENDING）
+      requireReviewOverCents: opts?.requireReview ? 0 : null,
+    });
+    const engine = new CommissionEngine({ config: makeConfig(storage) });
+    await engine.calculateCommissions({
+      userId: 'buyer',
+      orderId,
+      planKey: 'pro',
+      planType: 'one_time',
+      triggerScope: 'FIRST_PAYMENT',
+      amountTotal: 10000,
+      currency: 'USD',
+    });
+    const id = storage.allCommissions()[0]!.id;
+    return { storage, engine, id };
+  }
+
+  it('合法流转：APPROVED → PAID 成功且状态更新', async () => {
+    const { storage, id } = await setupCommission('order_sm1');
+    expect(storage.getCommission(id)?.status).toBe('APPROVED');
+    const ok = await storage.transitionCommissionStatus(id, ['APPROVED'], 'PAID');
+    expect(ok).toBe(true);
+    expect(storage.getCommission(id)?.status).toBe('PAID');
+  });
+
+  it('非法流转：前置状态不符时返回 false 且状态不变', async () => {
+    const { storage, id } = await setupCommission('order_sm2');
+    // 当前 APPROVED，尝试以 PENDING 为前置条件 → 拒绝
+    const ok = await storage.transitionCommissionStatus(id, ['PENDING'], 'REJECTED');
+    expect(ok).toBe(false);
+    expect(storage.getCommission(id)?.status).toBe('APPROVED');
+  });
+
+  it('终态保护：REFUNDED 不可流转回 PAID', async () => {
+    const { storage, id } = await setupCommission('order_sm3');
+    await storage.markCommissionsRefunded('order_sm3');
+    const ok = await storage.transitionCommissionStatus(id, ['PENDING', 'APPROVED'], 'PAID');
+    expect(ok).toBe(false);
+    expect(storage.getCommission(id)?.status).toBe('REFUNDED');
+  });
+
+  it('幂等：重复执行同一流转第二次返回 false（乐观并发控制）', async () => {
+    const { storage, id } = await setupCommission('order_sm4');
+    const first = await storage.transitionCommissionStatus(id, ['APPROVED'], 'PAID');
+    const second = await storage.transitionCommissionStatus(id, ['APPROVED'], 'PAID');
+    expect(first).toBe(true);
+    expect(second).toBe(false);
+    expect(storage.getCommission(id)?.status).toBe('PAID');
+  });
+
+  it('不存在的佣金 ID：返回 false', async () => {
+    const storage = new InMemoryCommissionStorage();
+    const ok = await storage.transitionCommissionStatus('nope', ['PENDING'], 'APPROVED');
+    expect(ok).toBe(false);
+  });
+
+  it('engine.approveCommission：PENDING → APPROVED，重复审批返回 false', async () => {
+    const { storage, engine, id } = await setupCommission('order_sm5', { requireReview: true });
+    expect(storage.getCommission(id)?.status).toBe('PENDING');
+    expect(await engine.approveCommission(id)).toBe(true);
+    expect(storage.getCommission(id)?.status).toBe('APPROVED');
+    expect(await engine.approveCommission(id)).toBe(false); // Layer 3：重复审批被拒
+  });
+
+  it('engine.rejectCommission：PENDING → REJECTED；已审批的不可再拒绝', async () => {
+    const { storage, engine, id } = await setupCommission('order_sm6', { requireReview: true });
+    expect(await engine.rejectCommission(id, '刷单嫌疑')).toBe(true);
+    expect(storage.getCommission(id)?.status).toBe('REJECTED');
+
+    const second = await setupCommission('order_sm7'); // AUTO_APPROVED → APPROVED
+    expect(await second.engine.rejectCommission(second.id)).toBe(false);
+    expect(second.storage.getCommission(second.id)?.status).toBe('APPROVED');
+  });
+
+  it('engine.markCommissionPaid：APPROVED → PAID，防重复打款', async () => {
+    const { storage, engine, id } = await setupCommission('order_sm8');
+    expect(await engine.markCommissionPaid(id)).toBe(true);
+    expect(storage.getCommission(id)?.status).toBe('PAID');
+    expect(await engine.markCommissionPaid(id)).toBe(false); // 重放打款必须中止
+  });
+
+  it('engine.markCommissionPaid：PENDING（未审批）不可直接打款', async () => {
+    const { storage, engine, id } = await setupCommission('order_sm9', { requireReview: true });
+    expect(await engine.markCommissionPaid(id)).toBe(false);
+    expect(storage.getCommission(id)?.status).toBe('PENDING');
+  });
+});

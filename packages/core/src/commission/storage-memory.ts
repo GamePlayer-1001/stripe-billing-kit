@@ -5,6 +5,7 @@
 import type {
   CommissionRow,
   CommissionRuleRow,
+  CommissionStatus,
   CommissionStorage,
   ReferralCodeRow,
   ReferralRelationshipRow,
@@ -107,6 +108,16 @@ export class InMemoryCommissionStorage implements CommissionStorage {
       }
     }
     return count;
+  }
+  async transitionCommissionStatus(
+    commissionId: string,
+    from: CommissionStatus[],
+    to: CommissionStatus,
+  ): Promise<boolean> {
+    const c = this.commissions.get(commissionId);
+    if (!c || !from.includes(c.status)) return false;
+    c.status = to;
+    return true;
   }
 
   // ── 测试辅助 ──

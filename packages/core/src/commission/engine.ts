@@ -221,6 +221,46 @@ export class CommissionEngine {
   }
 
   /**
+   * 审批通过：PENDING → APPROVED（Layer 3 条件流转，重复审批返回 false）。
+   */
+  async approveCommission(commissionId: string): Promise<boolean> {
+    const ok = await this.config.storage.transitionCommissionStatus(commissionId, ['PENDING'], 'APPROVED');
+    if (ok) {
+      this.logger?.info('commission.review.approved', { commissionId });
+    } else {
+      this.logger?.warn('commission.review.approve_rejected_by_state', { commissionId });
+    }
+    return ok;
+  }
+
+  /**
+   * 审批拒绝：PENDING → REJECTED（拒绝原因由端点层强制必填，此处仅记审计日志）。
+   */
+  async rejectCommission(commissionId: string, reason?: string): Promise<boolean> {
+    const ok = await this.config.storage.transitionCommissionStatus(commissionId, ['PENDING'], 'REJECTED');
+    if (ok) {
+      this.logger?.info('commission.review.rejected', { commissionId, reason });
+    } else {
+      this.logger?.warn('commission.review.reject_rejected_by_state', { commissionId });
+    }
+    return ok;
+  }
+
+  /**
+   * 标记打款完成：APPROVED → PAID（防重复打款的最后一道闸，见 5.4.1 Layer 3）。
+   * 打款腿（PayoutProvider）落地后由 payout 流程调用；返回 false 必须中止打款。
+   */
+  async markCommissionPaid(commissionId: string): Promise<boolean> {
+    const ok = await this.config.storage.transitionCommissionStatus(commissionId, ['APPROVED'], 'PAID');
+    if (ok) {
+      this.logger?.info('commission.payout.marked_paid', { commissionId });
+    } else {
+      this.logger?.warn('commission.payout.mark_paid_rejected_by_state', { commissionId });
+    }
+    return ok;
+  }
+
+  /**
    * 计算并落库一笔订单的多级佣金（幂等）。
    */
   async calculateCommissions(input: CalculateCommissionInput): Promise<CommissionCalculationResult> {
