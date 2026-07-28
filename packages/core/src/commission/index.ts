@@ -152,6 +152,18 @@ export {
   type ScheduledSkipReason,
 } from './payout-scheduler.js';
 
+// 打款双向对账 + 月度财务报表（Phase 3：内部账本 vs 通道流水）
+export {
+  reconcilePayouts,
+  generateMonthlyPayoutReport,
+  type PayoutReconcileOptions,
+  type PayoutReconcileReport,
+  type PayoutMismatch,
+  type PayoutMismatchKind,
+  type MonthlyReportOptions,
+  type MonthlyPayoutReport,
+} from './payout-reconcile.js';
+
 // Outbox 异步任务（5.4.2 webhook 快速响应）
 export {
   enqueueCommissionJob,
