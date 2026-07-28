@@ -4,6 +4,7 @@ import { BillingError } from './errors.js';
 import { invalidateCatalogCache } from './catalog.js';
 import { syncStripeToDb } from './sync.js';
 import { resolveUserByCustomerId } from './customers.js';
+import { handleCommissionEvent } from './commission/events.js';
 
 export interface WebhookResult {
   received: true;
@@ -157,6 +158,18 @@ export async function handleWebhookRequest(
     default:
       ctx.logger.info('billing.webhook.ignored', { type: event.type });
       return { received: true, ignored: true };
+  }
+
+  // 佣金模块（可选）：结账/账单事件触发计佣。失败不影响主流程（引擎层另有幂等保护）
+  if (
+    ctx.config.commission?.engine &&
+    (event.type === 'checkout.session.completed' || event.type === 'invoice.paid')
+  ) {
+    try {
+      await handleCommissionEvent(ctx, ctx.config.commission.engine, event);
+    } catch (err) {
+      ctx.logger.error('billing.webhook.commission_failed', { eventId: event.id, err: String(err) });
+    }
   }
 
   return { received: true };

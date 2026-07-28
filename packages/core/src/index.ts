@@ -114,3 +114,51 @@ export async function reconcile(config: BillingConfig, options?: ReconcileOption
 export type { ReconcileOptions, ReconcileReport } from './reconcile.js';
 
 export type { BillingErrorCode } from './errors.js';
+
+// ── 佣金 / 邀请返利模块（Phase 1 MVP）──
+export {
+  CommissionEngine,
+  ReferralService,
+  InMemoryCommissionStorage,
+  buildReferralChain,
+  calculateStripeFee,
+  matchRule,
+  generateCode,
+  handleCommissionEvent,
+  processCheckoutCompleted,
+  processInvoicePaid,
+  resolveTriggerScope,
+} from './commission/index.js';
+export type {
+  RewardComponent,
+  ComponentType,
+  ValueMode,
+  DriverVariable,
+  LadderStep,
+  TriggerScope,
+  CommissionBase,
+  PlatformFeeHandlingMode,
+  RelationshipStatus,
+  CommissionStatus,
+  ReviewStatus,
+  GrantStatus,
+  ReferralCodeRow,
+  ReferralRelationshipRow,
+  CommissionRuleRow,
+  CommissionRow,
+  RateBreakdownEntry,
+  CommissionStorage,
+  StripeFeeConfig,
+  ProductRewardGrantInput,
+  CommissionHooks,
+  CommissionConfig,
+  CalculateCommissionInput,
+  TierCommissionResult,
+  CommissionCalculationResult,
+  CommissionEngineOptions,
+  ReferralServiceOptions,
+  ValidateCodeResult,
+  BindResult,
+  ChainNode,
+  BuildChainResult,
+} from './commission/index.js';
