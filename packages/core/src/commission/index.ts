@@ -43,6 +43,7 @@ export type {
   QueueStatus,
   AuditQueueItemRow,
   ConfigVersionRow,
+  ReferralStatsRow,
 } from './types.js';
 
 // 存储

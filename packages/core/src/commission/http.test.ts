@@ -176,4 +176,33 @@ describe('commission REST 端点', () => {
     const res = await handleBillingRequest(config, req({ method: 'GET', path: 'referrals/unknown/route/x', userId: 'u1' }));
     expect(res.status).toBe(404);
   });
+
+  it('GET referrals/:userId/stats：仅本人可查；统计口径与转化率正确', async () => {
+    const s = setup();
+    const id = await seedCommission(s, 'order_st1'); // 首付 10000 × 20% = 2000（转化闭环自增 convertedCount）
+
+    const noAuth = await handleBillingRequest(s.config, req({ path: 'referrals/referrer/stats' }));
+    expect(noAuth.status).toBe(401);
+    const other = await handleBillingRequest(s.config, req({ path: 'referrals/referrer/stats', userId: 'someone' }));
+    expect(other.status).toBe(403);
+
+    const res = await handleBillingRequest(s.config, req({ path: 'referrals/referrer/stats', userId: 'referrer' }));
+    expect(res.status).toBe(200);
+    const body = res.body as Record<string, number>;
+    expect(body.totalInvites).toBe(1);
+    expect(body.convertedCount).toBe(1); // 首付计佣后转化闭环
+    expect(body.activeRelationships).toBe(1); // PENDING → ACTIVE
+    expect(body.conversionRate).toBe(100);
+    expect(body.totalEarnings).toBe(2000);
+    expect(body.pendingCommissions).toBe(2000); // AUTO_APPROVED → APPROVED 仍属待结算
+    expect(body.paidThisMonth).toBe(0);
+
+    // 打款后：待结算清零，本月已发放入账
+    await s.engine.markCommissionPaid(id);
+    const paid = await handleBillingRequest(s.config, req({ path: 'referrals/referrer/stats', userId: 'referrer' }));
+    const paidBody = paid.body as Record<string, number>;
+    expect(paidBody.pendingCommissions).toBe(0);
+    expect(paidBody.paidThisMonth).toBe(2000);
+    expect(paidBody.totalEarnings).toBe(2000);
+  });
 });

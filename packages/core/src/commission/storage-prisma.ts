@@ -274,5 +274,36 @@ export function prismaCommissionStorage(prisma: PrismaCommissionLike): Commissio
         });
       }
     },
+
+    async getReferralStats(referrerUserId, opts) {
+      const now = new Date();
+      const monthStart = opts?.monthStart ?? new Date(now.getFullYear(), now.getMonth(), 1);
+      const [code, activeRelationships, total, pending, paidThisMonth] = await Promise.all([
+        prisma.referralCode.findUnique({ where: { userId: referrerUserId } }),
+        prisma.referralRelationship.count({
+          where: { referrerUserId, status: 'ACTIVE' },
+        }),
+        prisma.commission.aggregate({
+          where: { referrerUserId, status: { in: ['PENDING', 'APPROVED', 'PAID'] } },
+          _sum: { amount: true },
+        }),
+        prisma.commission.aggregate({
+          where: { referrerUserId, status: { in: ['PENDING', 'APPROVED'] } },
+          _sum: { amount: true },
+        }),
+        prisma.commission.aggregate({
+          where: { referrerUserId, status: 'PAID', createdAt: { gte: monthStart } },
+          _sum: { amount: true },
+        }),
+      ]);
+      return {
+        totalInvites: code?.totalInvites ?? 0,
+        convertedCount: code?.convertedCount ?? 0,
+        activeRelationships,
+        totalEarningsCents: total._sum?.amount ?? 0,
+        pendingCents: pending._sum?.amount ?? 0,
+        paidThisMonthCents: paidThisMonth._sum?.amount ?? 0,
+      };
+    },
   };
 }

@@ -7,6 +7,7 @@ import type {
   ConfigVersionRow,
   ReferralCodeRow,
   ReferralRelationshipRow,
+  ReferralStatsRow,
 } from './types.js';
 
 /** 行映射:snake_case → camelCase(jsonb 列 pg 已自动反序列化) */
@@ -410,6 +411,39 @@ export function pgCommissionStorage(db: PgLike): CommissionStorage {
           ],
         );
       }
+    },
+
+    async getReferralStats(referrerUserId, opts) {
+      const now = new Date();
+      const monthStart = opts?.monthStart ?? new Date(now.getFullYear(), now.getMonth(), 1);
+      const [codeRes, relRes, comRes] = await Promise.all([
+        db.query('SELECT total_invites, converted_count FROM referral_codes WHERE user_id = $1', [
+          referrerUserId,
+        ]),
+        db.query(
+          `SELECT COUNT(*)::int AS count FROM referral_relationships
+           WHERE referrer_user_id = $1 AND status = 'ACTIVE'`,
+          [referrerUserId],
+        ),
+        db.query(
+          `SELECT
+             COALESCE(SUM(amount) FILTER (WHERE status IN ('PENDING', 'APPROVED', 'PAID')), 0)::int AS total_earnings,
+             COALESCE(SUM(amount) FILTER (WHERE status IN ('PENDING', 'APPROVED')), 0)::int AS pending,
+             COALESCE(SUM(amount) FILTER (WHERE status = 'PAID' AND created_at >= $2), 0)::int AS paid_this_month
+           FROM commissions WHERE referrer_user_id = $1`,
+          [referrerUserId, monthStart],
+        ),
+      ]);
+      const code = codeRes.rows[0];
+      const agg = comRes.rows[0];
+      return {
+        totalInvites: code?.total_invites ?? 0,
+        convertedCount: code?.converted_count ?? 0,
+        activeRelationships: relRes.rows[0]?.count ?? 0,
+        totalEarningsCents: agg?.total_earnings ?? 0,
+        pendingCents: agg?.pending ?? 0,
+        paidThisMonthCents: agg?.paid_this_month ?? 0,
+      } satisfies ReferralStatsRow;
     },
   };
 }

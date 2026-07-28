@@ -172,6 +172,7 @@ export type {
   QueueStatus,
   AuditQueueItemRow,
   ConfigVersionRow,
+  ReferralStatsRow,
   AutoReviewRules,
   AutoReviewInput,
   AutoReviewResult,

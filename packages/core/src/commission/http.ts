@@ -94,6 +94,28 @@ export async function handleCommissionRequest(
     return json(200, { items: rows, limit, offset });
   }
 
+  // ── GET referrals/:userId/stats：邀请统计（登录态，仅本人；转化率等派生指标在此计算） ──
+  const mStats = method === 'GET' ? path.match(/^referrals\/([^/]+)\/stats$/) : null;
+  if (mStats) {
+    const targetUserId = decodeURIComponent(mStats[1]!);
+    if (!req.userId) return unauthorized();
+    if (req.userId !== targetUserId && !req.isAdmin) return forbidden();
+    const stats = await engine.storage.getReferralStats(targetUserId);
+    return json(200, {
+      totalInvites: stats.totalInvites,
+      convertedCount: stats.convertedCount,
+      activeRelationships: stats.activeRelationships,
+      // 转化率漏斗：转化数 / 邀请数（%，保留 1 位小数）
+      conversionRate:
+        stats.totalInvites > 0
+          ? Math.round((stats.convertedCount / stats.totalInvites) * 1000) / 10
+          : 0,
+      totalEarnings: stats.totalEarningsCents,
+      pendingCommissions: stats.pendingCents,
+      paidThisMonth: stats.paidThisMonthCents,
+    });
+  }
+
   // ── GET admin/audit-queue：人工审核队列（管理员；riskScore 倒序） ──
   if (route === 'GET admin/audit-queue') {
     if (!req.isAdmin) return forbidden();

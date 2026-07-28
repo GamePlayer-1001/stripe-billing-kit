@@ -483,6 +483,20 @@ export class CommissionEngine {
       return { successful: false, reason: 'NO_MATCHING_RULE', tiers: [], details: null };
     }
 
+    // 转化闭环：首付计佣落库后激活直接推荐关系（PENDING → ACTIVE）并累计 convertedCount（统计漏斗用）。
+    // 仅 PENDING 时执行 → webhook 重放/复购不重复计数。
+    if (input.triggerScope === 'FIRST_PAYMENT' && tiers.some((t) => t.tierLevel === 1 && t.inserted)) {
+      const rel = await storage.getActiveReferrer(input.userId);
+      if (rel && rel.status === 'PENDING') {
+        await storage.setRelationshipStatus(rel.id, 'ACTIVE', now);
+        await storage.incrementCodeStats(rel.originalCode, 'convertedCount');
+        this.logger?.info('commission.referral.converted', {
+          refereeUserId: input.userId,
+          relationshipId: rel.id,
+        });
+      }
+    }
+
     const totalCommission = tiers.reduce((sum, t) => sum + t.amount, 0);
     const netAmountForReport = input.amountTotal - stripeFee;
     return {

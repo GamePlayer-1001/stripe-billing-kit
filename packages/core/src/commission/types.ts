@@ -239,6 +239,13 @@ export interface CommissionStorage {
   markConfigVersionActive(programId: string, versionNumber: number, activatedAt: Date): Promise<void>;
   /** 用快照规则整体替换该 program 的规则表（回滚应用快照） */
   replaceRules(programId: string, rules: CommissionRuleRow[]): Promise<void>;
+
+  // 数据统计（P2 聚合查询）
+  /**
+   * 推荐人统计聚合，供 GET /referrals/:userId/stats。
+   * paidThisMonthCents 以佣金 createdAt 落在本月近似（精确打款时间待 Payout 腿 processedAt）。
+   */
+  getReferralStats(referrerUserId: string, opts?: { monthStart?: Date }): Promise<ReferralStatsRow>;
 }
 
 // ──────────────────────────────────────────────────────
@@ -387,4 +394,24 @@ export interface ClawbackResult {
   refundedCount: number;
   /** 已打款（PAID）无法自动回转、需人工追回的佣金 ID */
   paidRequiresManual: string[];
+}
+
+// ──────────────────────────────────────────────────────
+// 数据统计（P2：邀请人数 / 佣金总额 / 待结算 / 已发放）
+// ──────────────────────────────────────────────────────
+
+/** 推荐人统计聚合原始值（比率等派生指标由端点层计算） */
+export interface ReferralStatsRow {
+  /** 邀请码累计邀请数（totalInvites 计数器） */
+  totalInvites: number;
+  /** 邀请码累计转化数（convertedCount 计数器） */
+  convertedCount: number;
+  /** 当前 ACTIVE 关系数 */
+  activeRelationships: number;
+  /** 佣金总额 cents（PENDING + APPROVED + PAID，不含退款/拒绝） */
+  totalEarningsCents: number;
+  /** 待结算 cents（PENDING + APPROVED） */
+  pendingCents: number;
+  /** 本月已打款 cents（PAID 且 createdAt ≥ monthStart，近似口径） */
+  paidThisMonthCents: number;
 }

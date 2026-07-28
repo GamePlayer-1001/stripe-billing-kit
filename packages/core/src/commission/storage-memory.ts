@@ -12,6 +12,7 @@ import type {
   QueueStatus,
   ReferralCodeRow,
   ReferralRelationshipRow,
+  ReferralStatsRow,
   RelationshipStatus,
 } from './types.js';
 
@@ -206,6 +207,38 @@ export class InMemoryCommissionStorage implements CommissionStorage {
   }
   async replaceRules(programId: string, rules: CommissionRuleRow[]): Promise<void> {
     this.rules = this.rules.filter((r) => r.programId !== programId).concat(rules.map((r) => ({ ...r })));
+  }
+
+  // ── 数据统计 ──
+  async getReferralStats(referrerUserId: string, opts?: { monthStart?: Date }): Promise<ReferralStatsRow> {
+    const now = new Date();
+    const monthStart = opts?.monthStart ?? new Date(now.getFullYear(), now.getMonth(), 1);
+    const code = await this.getReferralCodeByUserId(referrerUserId);
+    let activeRelationships = 0;
+    for (const rel of this.relationships.values()) {
+      if (rel.referrerUserId === referrerUserId && rel.status === 'ACTIVE') activeRelationships += 1;
+    }
+    let totalEarningsCents = 0;
+    let pendingCents = 0;
+    let paidThisMonthCents = 0;
+    for (const c of this.commissions.values()) {
+      if (c.referrerUserId !== referrerUserId) continue;
+      if (c.status === 'PENDING' || c.status === 'APPROVED') {
+        totalEarningsCents += c.amount;
+        pendingCents += c.amount;
+      } else if (c.status === 'PAID') {
+        totalEarningsCents += c.amount;
+        if (c.createdAt >= monthStart) paidThisMonthCents += c.amount;
+      }
+    }
+    return {
+      totalInvites: code?.totalInvites ?? 0,
+      convertedCount: code?.convertedCount ?? 0,
+      activeRelationships,
+      totalEarningsCents,
+      pendingCents,
+      paidThisMonthCents,
+    };
   }
 
   // ── 测试辅助 ──
