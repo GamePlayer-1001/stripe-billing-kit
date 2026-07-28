@@ -135,6 +135,18 @@ export function prismaCommissionStorage(prisma: PrismaCommissionLike): Commissio
       });
     },
 
+    async listCommissionsSince(since, opts) {
+      const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 500);
+      const offset = Math.max(opts?.offset ?? 0, 0);
+      // 升序 + id 次序稳定排序,保证审计翻页不漏行
+      return prisma.commission.findMany({
+        where: { createdAt: { gte: since } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: limit,
+        skip: offset,
+      });
+    },
+
     async markCommissionsRefunded(orderId) {
       // Layer 3 单向流转:带前置状态条件的条件更新,PAID 记录不受影响(需人工追回)
       const result = await prisma.commission.updateMany({

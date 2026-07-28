@@ -127,6 +127,19 @@ export class InMemoryCommissionStorage implements CommissionStorage {
       .slice(offset, offset + limit)
       .map((c) => ({ ...c }));
   }
+  async listCommissionsSince(
+    since: Date,
+    opts?: { limit?: number; offset?: number },
+  ): Promise<CommissionRow[]> {
+    const limit = opts?.limit ?? 100;
+    const offset = opts?.offset ?? 0;
+    // 升序 + id 次序稳定排序，保证审计翻页不漏行
+    return [...this.commissions.values()]
+      .filter((c) => c.createdAt.getTime() >= since.getTime())
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+      .slice(offset, offset + limit)
+      .map((c) => ({ ...c }));
+  }
   async markCommissionsRefunded(orderId: string): Promise<number> {
     let count = 0;
     for (const c of this.commissions.values()) {

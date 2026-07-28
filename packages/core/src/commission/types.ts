@@ -295,6 +295,14 @@ export interface CommissionStorage {
     opts?: { limit?: number; offset?: number },
   ): Promise<CommissionRow[]>;
   /**
+   * 按时间窗口分页列佣金（createdAt 升序，稳定排序保证翻页不漏行）。
+   * Level 3 周期性审计扫描用（7.1）：runPeriodicAudit 逐页拉取窗口内全部佣金。
+   */
+  listCommissionsSince(
+    since: Date,
+    opts?: { limit?: number; offset?: number },
+  ): Promise<CommissionRow[]>;
+  /**
    * 退款追回：把该订单下 PENDING/APPROVED 的佣金回转为 REFUNDED，返回回转条数。
    * Layer 3 单向流转：必须带前置状态条件（WHERE status IN …），PAID 记录不得自动回转。
    */

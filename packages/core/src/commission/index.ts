@@ -111,6 +111,14 @@ export {
   type RiskAction,
 } from './fraud.js';
 
+// Level 3 周期性审计（7.1：高风险扫描 / 可疑佣金处置 / 欺诈报告）
+export {
+  runPeriodicAudit,
+  type PeriodicAuditOptions,
+  type HighRiskReferrer,
+  type FraudReport,
+} from './periodic-audit.js';
+
 // 实时事件总线（6.3 SSE；适配层 SSE 端点订阅）
 export {
   InMemoryReferralEventBus,
