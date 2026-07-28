@@ -42,6 +42,8 @@ export type {
 
 // 存储
 export { InMemoryCommissionStorage } from './storage-memory.js';
+export { pgCommissionStorage } from './storage-pg.js';
+export { prismaCommissionStorage, type PrismaCommissionLike } from './storage-prisma.js';
 
 // 邀请关系
 export {

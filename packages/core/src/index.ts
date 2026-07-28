@@ -120,6 +120,8 @@ export {
   CommissionEngine,
   ReferralService,
   InMemoryCommissionStorage,
+  pgCommissionStorage,
+  prismaCommissionStorage,
   buildReferralChain,
   calculateStripeFee,
   matchRule,
@@ -161,4 +163,5 @@ export type {
   BindResult,
   ChainNode,
   BuildChainResult,
+  PrismaCommissionLike,
 } from './commission/index.js';

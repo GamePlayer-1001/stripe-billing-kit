@@ -44,3 +44,77 @@ model BillingEvent {
 
   @@map("billing_events")
 }
+
+// ══════════════════════════════════════════════════════
+// 佣金模块(可选:未启用 commission 时无需以下 4 个模型)
+// 适配 prismaCommissionStorage,详见 docs/COMMISSION-SYSTEM-SPEC.md 4.1
+// ══════════════════════════════════════════════════════
+
+model ReferralCode {
+  id             String   @id
+  code           String   @unique
+  userId         String   @unique @map("user_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  totalInvites   Int      @default(0) @map("total_invites")
+  convertedCount Int      @default(0) @map("converted_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("referral_codes")
+}
+
+model ReferralRelationship {
+  id             String    @id
+  referrerUserId String    @map("referrer_user_id")
+  refereeUserId  String    @map("referee_user_id")
+  originalCode   String    @map("original_code")
+  status         String    @default("PENDING") // PENDING/ACTIVE/EXPIRED/TERMINATED
+  createdAt      DateTime  @default(now()) @map("created_at")
+  activatedAt    DateTime? @map("activated_at")
+  metadata       Json?
+
+  @@unique([referrerUserId, refereeUserId])
+  @@index([refereeUserId, status])
+  @@map("referral_relationships")
+}
+
+model CommissionRule {
+  id                      String   @id
+  programId               String   @map("program_id")
+  planKey                 String?  @map("plan_key") // null = 全局适用
+  triggerScope            String   @default("FIRST_PAYMENT") @map("trigger_scope")
+  tierLevel               Int?     @map("tier_level") // null = 所有层级
+  components              Json // RewardComponent[] 组件数组
+  commissionBase          String   @default("NET_BASED") @map("commission_base")
+  platformFeeHandlingMode String   @default("CONSUMED_BY_PLATFORM") @map("platform_fee_handling_mode")
+  holdPeriodDays          Int      @default(30) @map("hold_period_days")
+  autoApproveUnderCents   Int?     @map("auto_approve_under_cents")
+  requireReviewOverCents  Int?     @map("require_review_over_cents")
+  isActive                Boolean  @default(true) @map("is_active")
+  priority                Int      @default(0)
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  @@index([programId, isActive])
+  @@map("commission_rules")
+}
+
+model Commission {
+  id             String   @id
+  referrerUserId String   @map("referrer_user_id")
+  orderId        String   @map("order_id")
+  planKey        String   @map("plan_key")
+  amount         Int // 现金佣金合计(cents)
+  currency       String
+  rateBreakdown  Json?    @map("rate_breakdown") // 组件计算明细快照(审计回溯)
+  grantStatus    String   @default("NOT_APPLICABLE") @map("grant_status")
+  tierLevel      Int      @default(1) @map("tier_level")
+  status         String   @default("PENDING")
+  reviewStatus   String   @default("AUTO_APPROVED") @map("review_status")
+  validUntil     DateTime @map("valid_until")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // 幂等键:webhook 重放/并发投递时数据库层拦截重复计佣
+  @@unique([orderId, referrerUserId, tierLevel])
+  @@index([referrerUserId, status])
+  @@map("commissions")
+}
